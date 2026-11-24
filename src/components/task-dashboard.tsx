@@ -54,7 +54,7 @@ const filterItems: Array<{ value: StatusFilter; label: string; icon: typeof Circ
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <span className="flex size-10 items-center justify-center rounded-2xl bg-accent text-on-accent shadow-sm">
+      <span className="glass-soft flex size-10 items-center justify-center rounded-2xl text-accent">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
           <path d="M8 8.5h6M8 12h6M8 15.5h3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />

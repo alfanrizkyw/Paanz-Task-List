@@ -81,8 +81,17 @@ async function request(url: string, cookies: CookieEntry[], init?: RequestInit) 
 }
 
 function firstMoodleLink(html: string) {
-  const match = html.match(/href=["']([^"']*lmsslc\.polinema\.ac\.id[^"']*)["']/i);
-  return match?.[1] ?? `${MOODLE_URL}/my/`;
+  const patterns = [
+    /href=["']([^"']*lmsslc\.polinema\.ac\.id[^"']*)["']/i,
+    /href=["']([^"']*moodle[^"']*)["']/i,
+    /content=["']\d+\s*;\s*url=([^"']+)["']/i,
+    /location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const value = html.match(pattern)?.[1]?.replace(/&amp;/gi, "&");
+    if (value?.startsWith("https://")) return value;
+  }
+  return `${MOODLE_URL}/my/`;
 }
 
 export async function loginWithSiakad(nim: string, password: string) {
@@ -112,14 +121,21 @@ export async function loginWithSiakad(nim: string, password: string) {
     throw new SpadaError("NIM atau password SIAKAD salah.", "LOGIN_FAILED");
   }
 
-  const ssoCookie = loginResponse.cookies.find((cookie) => cookie.name === "polinema_sso");
-  if (!ssoCookie) throw new SpadaError("Sesi SSO kampus tidak diterbitkan.", "LOGIN_FAILED");
+  const dashboard = await request(`${SIAKAD_URL}/beranda`, loginResponse.cookies, {
+    headers: { Referer: `${SIAKAD_URL}/login` },
+  });
+  const ssoCookie = dashboard.cookies.find((cookie) => cookie.name === "polinema_sso");
+  if (!ssoCookie) throw new SpadaError("Sesi SSO kampus tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
 
-  const slc = await request(SLC_URL, loginResponse.cookies);
-  const spadaCookie = slc.cookies.find((cookie) => cookie.name === "POLIMASPADA");
-  if (!spadaCookie) throw new SpadaError("Sesi SPADA tidak diterbitkan.", "LOGIN_FAILED");
+  const slc = await request(SLC_URL, dashboard.cookies.filter((cookie) => cookie.name === "polinema_sso"));
+  let spadaState = slc;
+  if (!slc.cookies.some((cookie) => cookie.name === "POLIMASPADA")) {
+    spadaState = await request(SPADA_URL, slc.cookies);
+  }
+  const spadaCookie = spadaState.cookies.find((cookie) => cookie.name === "POLIMASPADA");
+  if (!spadaCookie) throw new SpadaError("Sesi SPADA tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
 
-  const courses = await request(`${SPADA_URL}?mod=matakuliah`, slc.cookies);
+  const courses = await request(`${SPADA_URL}?mod=matakuliah`, spadaState.cookies);
   const coursesHtml = await courses.response.text();
   if (/IDXPG=['"]GES['"]/i.test(coursesHtml) || (/gsi_btn/i.test(coursesHtml) && !/gallery_grid_item/i.test(coursesHtml))) {
     throw new SpadaError("Sesi SPADA belum aktif. Ulangi login beberapa saat lagi.", "SESSION_EXPIRED");
@@ -127,7 +143,7 @@ export async function loginWithSiakad(nim: string, password: string) {
 
   const bridge = await request(firstMoodleLink(coursesHtml), courses.cookies);
   const moodleCookie = bridge.cookies.find((cookie) => cookie.name === "MoodleSession");
-  if (!moodleCookie) throw new SpadaError("Sesi Moodle tidak diterbitkan.", "LOGIN_FAILED");
+  if (!moodleCookie) throw new SpadaError("Sesi Moodle tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
 
   await writeSpadaSession({
     nim: cleanNim,

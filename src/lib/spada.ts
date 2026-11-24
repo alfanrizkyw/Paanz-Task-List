@@ -487,6 +487,9 @@ export async function submitSpadaTask(input: {
         mimeType: input.file.type || "application/octet-stream",
         buffer: Buffer.from(await input.file.arrayBuffer()),
       });
+      const uploadButton = page.getByRole("button", { name: /upload this file|unggah (?:file|berkas) ini/i }).first();
+      await uploadButton.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
+      if (await uploadButton.isVisible()) await uploadButton.click();
       const uploadArea = page.locator(".filemanager-container, .dndupload-container").first();
       if (await uploadArea.count()) {
         await page.waitForFunction((name) => {
