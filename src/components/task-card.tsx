@@ -46,7 +46,6 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
             <span className="font-mono font-medium tracking-wide text-muted-ink">{course?.code ?? "SPADA"}</span>
             <span className="size-1 rounded-full bg-line-strong" />
             <span className="text-secondary-ink">{course?.name ?? "Mata kuliah"}</span>
-            <span className="rounded-md bg-surface-subtle px-2 py-1 text-muted-ink">{task.kind}</span>
           </div>
           <h3 className="text-[15px] font-semibold leading-6 text-ink sm:text-base">{task.title}</h3>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-secondary-ink">
@@ -68,11 +67,7 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
           <span className={cn("inline-flex min-h-7 items-center rounded-lg px-2.5 text-xs font-medium", statusStyle[task.status])}>
             {statusShortLabels[task.status]}
           </span>
-          {task.status === "submitted" ? (
-            <span className="inline-flex h-11 items-center gap-1.5 px-2 text-xs font-medium text-accent">
-              <Check size={15} /> Terkirim
-            </span>
-          ) : (
+          {task.status !== "submitted" ? (
             <button
               type="button"
               className="inline-flex h-11 items-center gap-2 rounded-xl px-3 text-xs font-medium text-secondary-ink transition-colors hover:bg-surface-subtle hover:text-ink"
@@ -83,7 +78,7 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
               <span className="hidden sm:inline">Ubah status</span>
               <ArrowUpRight size={14} className="sm:hidden" />
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </article>

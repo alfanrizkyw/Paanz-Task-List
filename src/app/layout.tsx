@@ -46,7 +46,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <div className="aurora" aria-hidden="true">
+            <div className="aurora-ribbon aurora-ribbon-a" />
+            <div className="aurora-ribbon aurora-ribbon-b" />
+            <div className="aurora-ribbon aurora-ribbon-c" />
+          </div>
+          <div className="relative z-10">
+            {children}
+          </div>
           <Toaster richColors closeButton position="top-center" />
         </ThemeProvider>
       </body>

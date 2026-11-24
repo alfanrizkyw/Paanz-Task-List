@@ -35,3 +35,14 @@ export interface SyncPayload {
   syncedAt: string;
   partial?: boolean;
 }
+
+export interface TaskStatusEntry {
+  status: TaskStatus;
+  updatedAt: string;
+}
+
+export interface TaskState {
+  statuses: Record<string, TaskStatusEntry>;
+  cache?: SyncPayload;
+  updatedAt: string;
+}

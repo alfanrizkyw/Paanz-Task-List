@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { EncryptJWT, jwtDecrypt } from "jose";
 
 const COOKIE_NAME = "paanz_spada_session";
-const MAX_AGE = 60 * 60 * 24 * 7;
+const MAX_AGE = 60 * 60 * 24 * 365 * 10;
 
 export interface SpadaSession {
   nim: string;
@@ -25,7 +25,6 @@ export async function readSpadaSession(): Promise<SpadaSession | null> {
 
   try {
     const { payload } = await jwtDecrypt(token, encryptionKey());
-    if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) return null;
     if (
       typeof payload.nim !== "string" ||
       typeof payload.name !== "string" ||
@@ -54,7 +53,7 @@ export async function writeSpadaSession(session: SpadaSession) {
   })
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime(Math.floor(Date.now() / 1000) + MAX_AGE)
     .encrypt(encryptionKey());
 
   (await cookies()).set(COOKIE_NAME, token, {
@@ -63,6 +62,7 @@ export async function writeSpadaSession(session: SpadaSession) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: MAX_AGE,
+    expires: new Date(Date.now() + MAX_AGE * 1000),
   });
 }
 

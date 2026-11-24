@@ -117,8 +117,7 @@ function firstMoodleLink(html: string) {
 
 export async function loginWithSiakad(nim: string, password: string) {
   const cleanNim = nim.trim();
-  const cleanPassword = password.trim();
-  if (!/^\d{6,20}$/.test(cleanNim) || cleanPassword.length < 6) {
+  if (!/^\d{6,20}$/.test(cleanNim) || !password.trim()) {
     throw new SpadaError("NIM atau password tidak valid.", "LOGIN_FAILED");
   }
 
@@ -126,11 +125,16 @@ export async function loginWithSiakad(nim: string, password: string) {
   const loginResponse = await request(`${SIAKAD_URL}/login`, loginPage.cookies, {
     method: "POST",
     headers: {
+      "Accept": "application/json, text/javascript, */*; q=0.01",
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      Origin: SIAKAD_URL,
       Referer: `${SIAKAD_URL}/login`,
       "X-Requested-With": "XMLHttpRequest",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Dest": "empty",
     },
-    body: new URLSearchParams({ username: cleanNim, password: cleanPassword }),
+    body: new URLSearchParams({ username: cleanNim, password }),
   });
 
   let loginData: { output?: string; nama?: string; name?: string };

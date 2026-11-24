@@ -114,10 +114,7 @@ export function TaskDetailDialog({
 
               <div className="mt-6 rounded-2xl border border-line bg-surface-subtle/60 p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-ink">Kumpulkan ke SPADA</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted-ink">Berkas atau jawaban dikirim langsung tanpa menyalin tugas.</p>
-                  </div>
+                  <h3 className="text-sm font-semibold text-ink">Kumpulkan ke SPADA</h3>
                   {task.sourceUrl ? (
                     <a href={task.sourceUrl} target="_blank" rel="noreferrer" className="icon-button -my-2 -mr-2" aria-label="Buka tugas di SPADA">
                       <ArrowUpRight size={18} />

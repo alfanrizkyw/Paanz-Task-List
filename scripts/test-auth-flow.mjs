@@ -91,7 +91,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 try {
   await loginWithSiakad(" 123456789 ", "  data-uji-bukan-kredensial  ");
-  assert.deepEqual(postedCredentials, { username: "123456789", password: "data-uji-bukan-kredensial" });
+  assert.deepEqual(postedCredentials, { username: "123456789", password: "  data-uji-bukan-kredensial  " });
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].nim, "123456789");
   assert.equal(sessions[0].name, "Mahasiswa Uji");
@@ -106,7 +106,7 @@ try {
   });
   assert.equal(sessions.length, 1);
 
-  console.log(JSON.stringify({ loginFlow: "lulus", cookieBridge: "lulus", trimmedCredentials: "lulus", rejectedLogin: "lulus" }));
+  console.log(JSON.stringify({ loginFlow: "lulus", cookieBridge: "lulus", passwordDikirimApaAdanya: "lulus", rejectedLogin: "lulus" }));
 } finally {
   globalThis.fetch = originalFetch;
 }
