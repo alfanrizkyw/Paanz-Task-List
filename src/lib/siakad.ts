@@ -17,20 +17,30 @@ const ALLOWED_HOSTS = new Set([
 interface CookieEntry {
   name: string;
   value: string;
+  expired?: boolean;
 }
 
 function parseCookies(response: Response): CookieEntry[] {
   const headers = response.headers as Headers & { getSetCookie?: () => string[] };
   return (headers.getSetCookie?.() ?? []).flatMap((value) => {
-    const pair = value.split(";", 1)[0];
+    const [pair, ...attributes] = value.split(";");
     const index = pair.indexOf("=");
-    return index > 0 ? [{ name: pair.slice(0, index).trim(), value: pair.slice(index + 1).trim() }] : [];
+    if (index <= 0) return [];
+    const maxAgeValue = attributes.map((attribute) => attribute.match(/^\s*max-age=([\d-]+)/i)?.[1]).find(Boolean);
+    const expiresValue = attributes.map((attribute) => attribute.match(/^\s*expires=(.+)$/i)?.[1]?.trim()).find(Boolean);
+    const expired = maxAgeValue !== undefined
+      ? Number(maxAgeValue) <= 0
+      : expiresValue !== undefined && Date.parse(expiresValue) <= Date.now();
+    return [{ name: pair.slice(0, index).trim(), value: pair.slice(index + 1).trim(), expired }];
   });
 }
 
 function mergeCookies(current: CookieEntry[], incoming: CookieEntry[]) {
   const map = new Map(current.map((cookie) => [cookie.name, cookie.value]));
-  for (const cookie of incoming) map.set(cookie.name, cookie.value);
+  for (const cookie of incoming) {
+    if (cookie.expired) map.delete(cookie.name);
+    else map.set(cookie.name, cookie.value);
+  }
   return [...map].map(([name, value]) => ({ name, value }));
 }
 
@@ -82,16 +92,27 @@ async function request(url: string, cookies: CookieEntry[], init?: RequestInit) 
 
 function firstMoodleLink(html: string) {
   const patterns = [
-    /href=["']([^"']*lmsslc\.polinema\.ac\.id[^"']*)["']/i,
-    /href=["']([^"']*moodle[^"']*)["']/i,
-    /content=["']\d+\s*;\s*url=([^"']+)["']/i,
-    /location(?:\.href)?\s*=\s*["']([^"']+)["']/i,
+    /href=["']([^"']*lmsslc\.polinema\.ac\.id[^"']*)["']/gi,
+    /href=["']([^"']*moodle[^"']*)["']/gi,
+    /content=["']\d+\s*;\s*url=([^"']+)["']/gi,
+    /location(?:\.href)?\s*=\s*["']([^"']+)["']/gi,
   ];
   for (const pattern of patterns) {
-    const value = html.match(pattern)?.[1]?.replace(/&amp;/gi, "&");
-    if (value?.startsWith("https://")) return value;
+    for (const match of html.matchAll(pattern)) {
+      const value = match[1]?.replace(/&amp;/gi, "&");
+      if (!value) continue;
+      try {
+        const target = new URL(value, SPADA_URL);
+        const isMoodleHost = target.hostname === new URL(MOODLE_URL).hostname;
+        const isMoodleRoute = /moodle|lmsslc/i.test(`${target.pathname}${target.search}`);
+        if (target.protocol === "https:" && ALLOWED_HOSTS.has(target.hostname) && (isMoodleHost || isMoodleRoute)) {
+          return target.toString();
+        }
+      } catch {
+        continue;
+      }
+    }
   }
-  return `${MOODLE_URL}/my/`;
 }
 
 export async function loginWithSiakad(nim: string, password: string) {
@@ -141,9 +162,16 @@ export async function loginWithSiakad(nim: string, password: string) {
     throw new SpadaError("Sesi SPADA belum aktif. Ulangi login beberapa saat lagi.", "SESSION_EXPIRED");
   }
 
-  const bridge = await request(firstMoodleLink(coursesHtml), courses.cookies);
+  const moodleLink = firstMoodleLink(coursesHtml);
+  if (!moodleLink) throw new SpadaError("Tautan Moodle tidak ditemukan pada SPADA.", "STRUCTURE_UNKNOWN");
+  const bridge = await request(moodleLink, courses.cookies);
+  const bridgeHtml = await bridge.response.text();
+  const bridgeUrl = new URL(bridge.url);
+  const isMoodleLogin = bridgeUrl.hostname === new URL(MOODLE_URL).hostname && (
+    /\/login\/index\.php/i.test(bridgeUrl.pathname) || /<input\b[^>]*name=["']password["']/i.test(bridgeHtml)
+  );
   const moodleCookie = bridge.cookies.find((cookie) => cookie.name === "MoodleSession");
-  if (!moodleCookie) throw new SpadaError("Sesi Moodle tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
+  if (isMoodleLogin || !moodleCookie) throw new SpadaError("Sesi Moodle tidak aktif. Coba login kembali.", "LOGIN_FAILED");
 
   await writeSpadaSession({
     nim: cleanNim,

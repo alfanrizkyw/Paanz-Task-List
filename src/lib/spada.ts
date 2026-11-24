@@ -232,8 +232,8 @@ function tableRows(html: string) {
 
 function submissionStatus(value: string, fallback = ""): TaskStatus {
   const text = `${value} ${fallback}`;
-  if (/no submission|not submitted|no attempt|not attempted|belum dikumpulkan|belum mencoba|tidak ada pengumpulan/i.test(text)) return "todo";
   if (/draft|sedang dikerjakan|in progress/i.test(text)) return "doing";
+  if (/no submission|not submitted|no attempt|not attempted|belum dikumpulkan|belum mencoba|tidak ada pengumpulan/i.test(text)) return "todo";
   if (/submitted for grading|submission (?:recorded|submitted)|assignment submitted|graded|dinilai|dikumpulkan|finished|completed|selesai/i.test(text)) return "submitted";
   return "todo";
 }
