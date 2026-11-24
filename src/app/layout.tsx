@@ -1,0 +1,55 @@
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, Manrope } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
+import "./globals.css";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "Paanz Task List",
+  description: "Satu tempat untuk melihat, mengerjakan, dan mengumpulkan tugas SPADA Polinema.",
+  applicationName: "Paanz Task List",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3f4f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#101215" },
+  ],
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="id"
+      suppressHydrationWarning
+      className={`${manrope.variable} ${plexMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full bg-background font-sans text-ink">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster richColors closeButton position="top-center" />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
