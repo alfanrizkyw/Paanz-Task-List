@@ -2,7 +2,7 @@ import { loginWithSiakad } from "@/lib/siakad";
 import { SpadaError } from "@/lib/spada";
 import { readSpadaSession } from "@/lib/spada-session";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 15 * 60 * 1000;
@@ -51,11 +51,13 @@ export async function POST(request: Request) {
       resetAt: current && current.resetAt > now ? current.resetAt : now + WINDOW_MS,
     });
     if (error instanceof SpadaError) {
+      console.warn("SIAKAD login failed", { code: error.code, message: error.message });
       return Response.json(
         { ok: false, code: error.code, message: error.message },
         { status: error.code === "LOGIN_FAILED" ? 401 : 400, headers: { "Cache-Control": "no-store" } },
       );
     }
+    console.error("SIAKAD login failed", { name: error instanceof Error ? error.name : "UnknownError" });
     return Response.json(
       { ok: false, code: "REQUEST_FAILED", message: "Login SIAKAD gagal. Coba lagi nanti." },
       { status: 500, headers: { "Cache-Control": "no-store" } },

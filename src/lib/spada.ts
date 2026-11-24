@@ -129,9 +129,12 @@ async function campusPage(value: string, session: SpadaSession) {
 function extractLinks(html: string, pageUrl: string) {
   const links: Array<{ href: string; text: string }> = [];
   for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
-    const href = absoluteUrl(attribute(match[1], "href"), pageUrl);
-    const text = stripHtml(match[2]);
-    if (href && isCampusUrl(href) && text) links.push({ href, text });
+    const rawHref = attribute(match[1], "href");
+    if (!rawHref) continue;
+    const href = absoluteUrl(rawHref, pageUrl);
+    const image = match[2].match(/<img\b[^>]*>/i)?.[0] ?? "";
+    const text = stripHtml(match[2]) || decodeEntities(attribute(match[1], "aria-label") || attribute(image, "alt") || attribute(image, "title"));
+    if (href && isCampusUrl(href)) links.push({ href, text });
   }
   return links;
 }
@@ -150,6 +153,13 @@ function pageTitle(html: string, fallback: string) {
   return stripHtml(heading || title || fallback).replace(/\s*[-|]\s*(?:SPADA|Moodle).*$/i, "").trim() || fallback;
 }
 
+function taskTitle(html: string, fallback: string) {
+  const main = html.match(/<(?:div|section)\b[^>]*(?:role=["']main["']|id=["']region-main["'])[^>]*>([\s\S]*?)<\/(?:div|section)>/i)?.[1] ?? html;
+  const heading = main.match(/<h[12]\b[^>]*>([\s\S]*?)<\/h[12]>/i)?.[1];
+  const breadcrumb = html.match(/<a\b[^>]*aria-current=["']page["'][^>]*>([\s\S]*?)<\/a>/i)?.[1];
+  return stripHtml(heading || breadcrumb || "").trim() || pageTitle(html, fallback);
+}
+
 function slug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
@@ -162,10 +172,11 @@ function courseCards(html: string) {
 }
 
 function cardTitle(card: string) {
-  const titled = card.match(/<[a-z][^>]*\bclass=["'][^"']*(?:gallery_card_title|gallery_grid_item_title|course-title|card-title)[^"']*["'][^>]*>([\s\S]*?)<\/[a-z][^>]*>/i)?.[1];
+  const container = card.match(/<[a-z][^>]*\bclass=["'][^"']*\bgallery_grid_item\b[^"']*["'][^>]*>/i)?.[0] ?? "";
+  const titled = card.match(/<[a-z][^>]*\bclass=["'][^"']*(?:gallery_image_title|gallery_card_title|gallery_grid_item_title|course-title|card-title)[^"']*["'][^>]*>([\s\S]*?)<\/[a-z][^>]*>/i)?.[1];
   const heading = card.match(/<h[234]\b[^>]*>([\s\S]*?)<\/h[234]>/i)?.[1];
   const link = extractLinks(card, BASE_URL)[0]?.text;
-  return stripHtml(titled || heading || link || "").slice(0, 180);
+  return stripHtml(attribute(container, "title") || titled || heading || link || "").slice(0, 180);
 }
 
 function courseCode(card: string, title: string) {
@@ -206,7 +217,7 @@ function parseMoodleDate(value: string) {
     return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 
-  const named = normalized.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Januari|Februari|Maret|Mei|Juni|Juli|Agustus|Oktober|Desember|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})(?:,?\s+(?:pukul\s+)?(\d{1,2})[:.](\d{2})(?:\s*(AM|PM))?)?/i);
+  const named = normalized.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Januari|Februari|Maret|Mei|Juni|Juli|Agustus|Oktober|Desember|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})(?:,?\s+(?:(?:pukul|jam)\s+)?(\d{1,2})[:.](\d{2})(?:\s*(AM|PM))?)?/i);
   if (named) {
     const month = months[named[2].toLowerCase()];
     let hour = Number(named[4] ?? 23);
@@ -243,6 +254,98 @@ function descriptionFrom(html: string) {
   return intro ? stripHtml(intro).slice(0, 800) : "";
 }
 
+interface SpadaTreeAnswer {
+  status?: string;
+  timemodified?: string;
+  nilai?: string;
+  txt?: string;
+}
+
+interface SpadaTreeNode {
+  key: string | number;
+  title: string;
+  folder?: number | boolean;
+  children?: SpadaTreeNode[];
+}
+
+function decodeUriValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function treeAnswers(value: string): SpadaTreeAnswer[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(decodeUriValue(value));
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is SpadaTreeAnswer => Boolean(item) && typeof item === "object")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function treeCourseName(value: string) {
+  return stripHtml(value).replace(/\s*:\s*Diploma\b.*$/i, "").trim();
+}
+
+function parseSpadaTree(nodes: SpadaTreeNode[]) {
+  const courses = new Map<string, Course>();
+  const tasks: Task[] = [];
+
+  function visit(items: SpadaTreeNode[], course?: Course, meeting = "") {
+    for (const node of items) {
+      const title = stripHtml(node.title);
+      if (!course) {
+        if (!node.folder) continue;
+        const name = treeCourseName(node.title);
+        if (!name) continue;
+        const currentCourse = { id: `course-${node.key}`, code: courseCode(node.title, name), name };
+        courses.set(currentCourse.id, currentCourse);
+        visit(node.children ?? [], currentCourse);
+        continue;
+      }
+
+      if (node.folder) {
+        visit(node.children ?? [], course, title);
+        continue;
+      }
+
+      const moduleId = attribute(node.title, "idmodule");
+      if (!/^\d+$/.test(moduleId)) continue;
+      const name = title || attribute(node.title, "title") || "Tugas";
+      const answers = treeAnswers(attribute(node.title, "jawaban"));
+      const latest = answers[answers.length - 1];
+      const sourceUrl = `${MOODLE_URL}/mod/assign/view.php?id=${moduleId}`;
+      const description = stripHtml(decodeUriValue(attribute(node.title, "txt")));
+      tasks.push({
+        id: sourceUrl,
+        courseId: course.id,
+        title: meeting ? `${name} — ${meeting}` : name,
+        kind: taskKind(`${name} ${meeting}`, sourceUrl),
+        dueAt: parseMoodleDate(attribute(node.title, "duedate")),
+        status: answers.length ? submissionStatus(latest?.status ?? "", "submitted") : "todo",
+        sourceUrl,
+        description: [meeting ? `Konteks: ${meeting}` : "", description].filter(Boolean).join("\n").slice(0, 800),
+        submittedAt: latest?.timemodified ? parseMoodleDate(latest.timemodified) : undefined,
+        submittable: true,
+      });
+    }
+  }
+
+  visit(nodes);
+  return { courses: [...courses.values()], tasks };
+}
+
+interface CourseCardItem {
+  title: string;
+  code: string;
+  href?: string;
+}
+
 interface TaskDetails {
   title: string;
   dueAt?: string;
@@ -272,7 +375,7 @@ async function readTaskDetails(value: string, session: SpadaSession): Promise<Ta
   }
 
   return {
-    title: pageTitle(page.html, isQuiz ? "Kuis" : "Tugas"),
+    title: taskTitle(page.html, isQuiz ? "Kuis" : "Tugas"),
     dueAt: parseMoodleDate(dueRow?.[1] ?? quizDate ?? ""),
     status: isAssignment ? submissionStatus(statusRow?.[1] ?? "") : submissionStatus(quizStatusRow?.[1] ?? plain),
     description: descriptionFrom(page.html),
@@ -306,69 +409,120 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
   }
 
   const cards = courseCards(dashboard.html);
-  if (!cards.length) {
+  const cardItems: CourseCardItem[] = cards.slice(0, MAX_COURSES).flatMap((card) => {
+    const title = cardTitle(card);
+    if (!title) return [];
+    const href = extractLinks(card, dashboard.url).find((link) => /gotourl=|lmsslc|moodle|\/course\/view\.php/i.test(link.href))?.href;
+    return [{ title, code: courseCode(card, title), ...(href ? { href } : {}) }];
+  });
+
+  if (!cardItems.length) {
     throw new SpadaError("Daftar mata kuliah SPADA belum dikenali. Coba sinkronkan kembali.", "STRUCTURE_UNKNOWN");
   }
 
-  const partial = cards.length > MAX_COURSES;
-  const courseLinks = cards.slice(0, MAX_COURSES).map((card) => {
-    const title = cardTitle(card);
-    const links = extractLinks(card, dashboard.url);
-    const href = links.find((link) => /lmsslc|moodle|\/course\/view\.php/i.test(`${link.href} ${link.text}`))?.href ?? links[0]?.href;
-    return href ? { href, title, code: courseCode(card, title), card } : null;
-  }).filter((link): link is NonNullable<typeof link> => Boolean(link?.href));
-
-  if (!courseLinks.length) {
-    throw new SpadaError("Tautan mata kuliah SPADA tidak ditemukan.", "STRUCTURE_UNKNOWN");
-  }
-
-  const coursePages = await mapLimit(courseLinks, 4, async (link) => ({
-    link,
-    page: await campusPage(link.href, session),
-  }));
+  let incomplete = cards.length > MAX_COURSES;
+  const linkedCards = cardItems.filter((item): item is CourseCardItem & { href: string } => Boolean(item.href));
+  const coursePages = await mapLimit(linkedCards, 4, async (item) => {
+    try {
+      const page = await campusPage(item.href, session);
+      if (isMoodleLogin(page.html, page.url)) {
+        throw new SpadaError("Sesi Moodle sudah berakhir. Masuk kembali dengan SIAKAD.", "SESSION_EXPIRED");
+      }
+      return { item, page };
+    } catch (error) {
+      if (error instanceof SpadaError && error.code === "SESSION_EXPIRED") throw error;
+      incomplete = true;
+      return { item, page: null };
+    }
+  });
 
   const courses: Course[] = [];
-  const taskLinks = new Map<string, { url: string; courseId: string }>();
-  for (const { link, page } of coursePages) {
-    if (isMoodleLogin(page.html, page.url)) {
-      throw new SpadaError("Sesi Moodle sudah berakhir. Masuk kembali dengan SIAKAD.", "SESSION_EXPIRED");
-    }
-    const courseUrl = new URL(page.url);
-    const title = link.title && !/masuk|klik|buka|lanjut/i.test(link.title) ? link.title : pageTitle(page.html, "Mata kuliah");
-    const id = `course-${courseUrl.searchParams.get("id") || slug(title) || slug(page.url)}`;
-    if (!courses.some((course) => course.id === id)) {
-      courses.push({ id, code: link.code, name: title });
-    }
+  for (const item of cardItems) {
+    const result = coursePages.find((entry) => entry.item === item);
+    const moodleId = result?.page ? new URL(result.page.url).searchParams.get("id") : null;
+    const title = treeCourseName(result?.page && /masuk|klik|buka|lanjut/i.test(item.title) ? pageTitle(result.page.html, item.title) : item.title);
+    const id = `course-${moodleId || slug(title)}`;
+    if (!courses.some((course) => course.id === id)) courses.push({ id, code: item.code, name: title });
+  }
 
+  const taskLinks = new Map<string, { url: string; courseId: string }>();
+  for (const { item, page } of coursePages) {
+    if (!page) continue;
+    const moodleId = new URL(page.url).searchParams.get("id");
+    const courseId = `course-${moodleId || slug(item.title)}`;
     for (const taskLink of extractLinks(page.html, page.url)) {
       const taskUrl = new URL(taskLink.href);
       if (!/^\/mod\/(?:assign|quiz)\/view\.php$/.test(taskUrl.pathname) || !/^\d+$/.test(taskUrl.searchParams.get("id") ?? "")) continue;
-      if (!taskLinks.has(taskLink.href)) taskLinks.set(taskLink.href, { url: taskLink.href, courseId: id });
+      if (!taskLinks.has(taskLink.href)) taskLinks.set(taskLink.href, { url: taskLink.href, courseId });
     }
   }
 
-  const limitedTasks = [...taskLinks.values()].slice(0, MAX_TASKS);
-  const taskResults = await mapLimit(limitedTasks, 5, async (request) => ({
-    request,
-    detail: await readTaskDetails(request.url, session),
-  }));
-  const tasks: Task[] = taskResults.map(({ request, detail }) => ({
-    id: request.url,
-    courseId: request.courseId,
-    title: detail.title,
-    kind: taskKind(detail.title, detail.url),
-    dueAt: detail.dueAt,
-    status: detail.status,
-    sourceUrl: detail.url,
-    description: detail.description,
-    submittable: detail.submittable,
-  }));
+  let tree: ReturnType<typeof parseSpadaTree> = { courses: [], tasks: [] };
+  try {
+    const treePage = await campusPage(new URL("?get_tree_ugas=1", BASE_URL).toString(), session);
+    if (isSpadaLogin(treePage.html)) {
+      throw new SpadaError("Sesi SPADA sudah berakhir. Masuk kembali dengan SIAKAD.", "SESSION_EXPIRED");
+    }
+    const parsed: unknown = JSON.parse(treePage.html);
+    if (Array.isArray(parsed)) tree = parseSpadaTree(parsed as SpadaTreeNode[]);
+    else incomplete = true;
+  } catch (error) {
+    if (error instanceof SpadaError && error.code === "SESSION_EXPIRED") throw error;
+    incomplete = true;
+  }
+
+  const treeCourseIds = new Map<string, string>();
+  for (const course of tree.courses) {
+    const existing = courses.find((item) => slug(item.name) === slug(course.name));
+    if (existing) {
+      treeCourseIds.set(course.id, existing.id);
+      continue;
+    }
+    treeCourseIds.set(course.id, course.id);
+    courses.push(course);
+  }
+
+  const tasks = new Map<string, Task>();
+  for (const task of tree.tasks.slice(0, MAX_TASKS)) {
+    tasks.set(task.id, { ...task, courseId: treeCourseIds.get(task.courseId) ?? task.courseId });
+  }
+  if (tree.tasks.length > MAX_TASKS) incomplete = true;
+
+  const extraLinks = [...taskLinks.values()].filter((link) => !tasks.has(link.url));
+  const remaining = Math.max(0, MAX_TASKS - tasks.size);
+  const limitedLinks = extraLinks.slice(0, remaining);
+  if (extraLinks.length > remaining) incomplete = true;
+
+  const taskResults = await mapLimit(limitedLinks, 5, async (request) => {
+    try {
+      return { request, detail: await readTaskDetails(request.url, session) };
+    } catch (error) {
+      if (error instanceof SpadaError && error.code === "SESSION_EXPIRED") throw error;
+      incomplete = true;
+      return { request, detail: null };
+    }
+  });
+
+  for (const { request, detail } of taskResults) {
+    if (!detail) continue;
+    tasks.set(request.url, {
+      id: request.url,
+      courseId: request.courseId,
+      title: detail.title,
+      kind: taskKind(detail.title, detail.url),
+      dueAt: detail.dueAt,
+      status: detail.status,
+      sourceUrl: detail.url,
+      description: detail.description,
+      submittable: detail.submittable,
+    });
+  }
 
   return {
     courses,
-    tasks,
+    tasks: [...tasks.values()],
     syncedAt: new Date().toISOString(),
-    partial: partial || taskLinks.size > MAX_TASKS,
+    partial: incomplete,
   };
 }
 

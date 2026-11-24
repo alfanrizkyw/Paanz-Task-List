@@ -117,7 +117,8 @@ function firstMoodleLink(html: string) {
 
 export async function loginWithSiakad(nim: string, password: string) {
   const cleanNim = nim.trim();
-  if (!/^\d{6,20}$/.test(cleanNim) || password.length < 6) {
+  const cleanPassword = password.trim();
+  if (!/^\d{6,20}$/.test(cleanNim) || cleanPassword.length < 6) {
     throw new SpadaError("NIM atau password tidak valid.", "LOGIN_FAILED");
   }
 
@@ -129,7 +130,7 @@ export async function loginWithSiakad(nim: string, password: string) {
       Referer: `${SIAKAD_URL}/login`,
       "X-Requested-With": "XMLHttpRequest",
     },
-    body: new URLSearchParams({ username: cleanNim, password }),
+    body: new URLSearchParams({ username: cleanNim, password: cleanPassword }),
   });
 
   let loginData: { output?: string; nama?: string; name?: string };
@@ -139,7 +140,8 @@ export async function loginWithSiakad(nim: string, password: string) {
     throw new SpadaError("Respons login SIAKAD tidak dapat dibaca.", "LOGIN_FAILED");
   }
   if (loginData.output !== "ok") {
-    throw new SpadaError("NIM atau password SIAKAD salah.", "LOGIN_FAILED");
+    const reason = typeof loginData.output === "string" ? loginData.output.trim() : "";
+    throw new SpadaError(reason && reason.length <= 180 && !/<[a-z]/i.test(reason) ? reason : "NIM atau password SIAKAD salah.", "LOGIN_FAILED");
   }
 
   const dashboard = await request(`${SIAKAD_URL}/beranda`, loginResponse.cookies, {

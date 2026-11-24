@@ -180,6 +180,7 @@ export function TaskDashboard({
   const [loginOpen, setLoginOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
+  const [syncErrorCode, setSyncErrorCode] = useState<string | undefined>();
   const [cacheReady, setCacheReady] = useState(!user);
   const router = useRouter();
   const syncInFlight = useRef(false);
@@ -187,7 +188,7 @@ export function TaskDashboard({
   const loadedStatusKey = useRef<string | null>(null);
 
   const tasksWithStatus = useMemo(
-    () => tasks.map((task) => ({ ...task, status: localStatuses[task.id] ?? task.status })),
+    () => tasks.map((task) => ({ ...task, status: task.status === "submitted" ? "submitted" : localStatuses[task.id] ?? task.status })),
     [tasks, localStatuses],
   );
 
@@ -240,10 +241,15 @@ export function TaskDashboard({
     syncInFlight.current = true;
     setSyncing(true);
     setSyncError("");
+    setSyncErrorCode(undefined);
+    let failureCode: string | undefined;
     try {
       const response = await fetch("/api/spada/sync", { method: "POST" });
       const result = (await response.json()) as SyncPayload & { ok: boolean; code?: string; message?: string };
-      if (!response.ok || !result.ok) throw new Error(result.message ?? "Sinkronisasi gagal.");
+      if (!response.ok || !result.ok) {
+        failureCode = result.code;
+        throw new Error(result.message ?? "Sinkronisasi gagal.");
+      }
       setTasks(result.tasks);
       setCourses(result.courses);
       setLastSyncedAt(result.syncedAt);
@@ -254,10 +260,11 @@ export function TaskDashboard({
         toast.warning("Tugas dimuat, tetapi cache perangkat tidak dapat disimpan.");
       }
       if (!silent) toast.success(`${result.tasks.length} tugas diperbarui dari SPADA`);
-      if (result.partial) toast.warning("Sebagian data ditampilkan karena jumlahnya melebihi batas sinkronisasi.");
+      if (result.partial) toast.warning("Sebagian data belum dapat dimuat. Coba sinkronkan kembali.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sinkronisasi SPADA gagal.";
       setSyncError(message);
+      setSyncErrorCode(failureCode);
       toast.error(message);
     } finally {
       syncInFlight.current = false;
@@ -286,6 +293,7 @@ export function TaskDashboard({
     setIsDemo(false);
     setLastSyncedAt(undefined);
     setSyncError("");
+    setSyncErrorCode(undefined);
     toast.success("Akun SIAKAD terhubung");
   }
 
@@ -305,6 +313,7 @@ export function TaskDashboard({
       setIsDemo(true);
       setLastSyncedAt(undefined);
       setSyncError("");
+      setSyncErrorCode(undefined);
       setSelectedTaskId(null);
       setMobileMenu(false);
       router.refresh();
@@ -528,9 +537,21 @@ export function TaskDashboard({
                 <h2 className="text-sm font-semibold text-ink">Tugas belum berhasil dimuat</h2>
                 <p className="mt-1 text-xs leading-5 text-secondary-ink">{syncError}</p>
               </div>
-              <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent" onClick={() => void handleSync()}>
-                <RefreshCw size={16} /> Coba sinkronkan
-              </button>
+              <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                {syncErrorCode === "AUTH_REQUIRED" || syncErrorCode === "SESSION_EXPIRED" ? (
+                  <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent" onClick={() => setLoginOpen(true)}>
+                    <LogIn size={16} /> Masuk kembali
+                  </button>
+                ) : null}
+                <button type="button" className={cn(
+                  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors",
+                  syncErrorCode === "AUTH_REQUIRED" || syncErrorCode === "SESSION_EXPIRED"
+                    ? "border border-line bg-surface-raised text-ink hover:bg-surface-subtle"
+                    : "bg-accent text-on-accent",
+                )} onClick={() => void handleSync()}>
+                  <RefreshCw size={16} /> Coba sinkronkan
+                </button>
+              </div>
             </section>
           ) : null}
 
