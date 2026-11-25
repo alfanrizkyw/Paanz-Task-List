@@ -19,10 +19,10 @@ const deadlineLine = {
 };
 
 const statusStyle: Record<TaskStatus, string> = {
-  todo: "bg-surface-subtle text-secondary-ink",
-  doing: "bg-warning-soft text-warning",
-  done: "bg-success-soft text-success",
-  submitted: "bg-accent-soft text-accent",
+  todo: "text-secondary-ink",
+  doing: "text-warning",
+  done: "text-success",
+  submitted: "text-accent",
 };
 
 export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCardProps) {
@@ -31,7 +31,7 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
 
   return (
     <article
-      className="glass-soft task-enter relative overflow-hidden rounded-2xl"
+      className="glass-soft task-card task-enter relative overflow-hidden rounded-[20px]"
       style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
     >
       <span className={cn("deadline-line", deadlineLine[deadline.tone])} />
@@ -43,11 +43,11 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
           aria-label={`Buka detail ${task.title}`}
         >
           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-mono font-medium tracking-wide text-muted-ink">{course?.code ?? "SPADA"}</span>
+            <span className="font-mono font-medium text-muted-ink">{course?.code ?? "SPADA"}</span>
             <span className="size-1 rounded-full bg-line-strong" />
             <span className="text-secondary-ink">{course?.name ?? "Mata kuliah"}</span>
           </div>
-          <h3 className="text-[15px] font-semibold leading-6 text-ink sm:text-base">{task.title}</h3>
+          <h3 className="text-[15px] font-medium leading-6 text-ink sm:text-base">{task.title}</h3>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-secondary-ink">
             <span className="inline-flex items-center gap-1.5">
               <Clock3 size={14} />
@@ -64,7 +64,8 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
         </button>
 
         <div className="flex shrink-0 flex-col items-end justify-between gap-3">
-          <span className={cn("inline-flex min-h-7 items-center rounded-lg px-2.5 text-xs font-medium", statusStyle[task.status])}>
+          <span className={cn("inline-flex min-h-7 items-center gap-1.5 px-1 text-xs font-medium", statusStyle[task.status])}>
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {statusShortLabels[task.status]}
           </span>
           {task.status !== "submitted" ? (

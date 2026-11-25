@@ -62,8 +62,8 @@ export function TaskDetailDialog({
   return (
     <Dialog.Root open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm" />
-        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-32px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl p-6 shadow-2xl sm:p-8">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xl" />
+        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-32px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[28px] p-5 shadow-2xl sm:p-7">
           {task ? (
             <>
               <div className="flex items-start justify-between gap-4">
@@ -72,7 +72,7 @@ export function TaskDetailDialog({
                     <span className="font-mono font-medium text-accent">{course?.code ?? "SPADA"}</span>
                     <span className="text-muted-ink">{task.kind}</span>
                   </div>
-                  <Dialog.Title className="text-xl font-semibold leading-8 text-ink sm:text-2xl">{task.title}</Dialog.Title>
+                  <Dialog.Title className="text-xl font-medium leading-8 tracking-tight text-ink sm:text-2xl">{task.title}</Dialog.Title>
                   <Dialog.Description className="mt-2 text-sm leading-6 text-secondary-ink">
                     {course?.name ?? "Mata kuliah"} · {statusLabels[task.status]}
                   </Dialog.Description>
@@ -114,7 +114,7 @@ export function TaskDetailDialog({
 
               <div className="mt-6 rounded-2xl border border-line bg-surface-subtle/60 p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-ink">Kumpulkan ke SPADA</h3>
+                  <h3 className="text-sm font-medium text-ink">Kumpulkan ke SPADA</h3>
                   {task.sourceUrl ? (
                     <a href={task.sourceUrl} target="_blank" rel="noreferrer" className="icon-button -my-2 -mr-2" aria-label="Buka tugas di SPADA">
                       <ArrowUpRight size={18} />
@@ -162,14 +162,14 @@ export function TaskDetailDialog({
                     href={task.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent transition-[background-color,transform] hover:brightness-95 active:scale-[0.99]"
+                    className="primary-action mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent"
                   >
                     <ArrowUpRight size={17} /> Buka kuis di SPADA
                   </a>
                 ) : (
                   <button
                     type="button"
-                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent transition-[background-color,transform] hover:brightness-95 active:scale-[0.99] disabled:opacity-45"
+                    className="primary-action mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-45"
                     disabled={!canSubmit || submitting}
                     onClick={handleSubmit}
                   >

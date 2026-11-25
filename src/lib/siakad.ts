@@ -121,68 +121,99 @@ export async function loginWithSiakad(nim: string, password: string) {
     throw new SpadaError("NIM atau password tidak valid.", "LOGIN_FAILED");
   }
 
-  const loginPage = await request(`${SIAKAD_URL}/login`, []);
-  const loginResponse = await request(`${SIAKAD_URL}/login`, loginPage.cookies, {
-    method: "POST",
-    headers: {
-      "Accept": "application/json, text/javascript, */*; q=0.01",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      Origin: SIAKAD_URL,
-      Referer: `${SIAKAD_URL}/login`,
-      "X-Requested-With": "XMLHttpRequest",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Dest": "empty",
-    },
-    body: new URLSearchParams({ username: cleanNim, password }),
-  });
+  let stage = "memuat halaman login";
+  let credentialsAccepted = false;
 
-  let loginData: { output?: string; nama?: string; name?: string };
   try {
-    loginData = (await loginResponse.response.json()) as typeof loginData;
-  } catch {
-    throw new SpadaError("Respons login SIAKAD tidak dapat dibaca.", "LOGIN_FAILED");
+    const loginPage = await request(`${SIAKAD_URL}/login`, []);
+    stage = "mengirim kredensial";
+    const loginResponse = await request(`${SIAKAD_URL}/login`, loginPage.cookies, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        Origin: SIAKAD_URL,
+        Referer: `${SIAKAD_URL}/login`,
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+      },
+      body: new URLSearchParams({ username: cleanNim, password }),
+    });
+
+    stage = "membaca respons login";
+    let loginData: { output?: string; nama?: string; name?: string };
+    try {
+      loginData = (await loginResponse.response.json()) as typeof loginData;
+    } catch {
+      throw new SpadaError("Respons login SIAKAD tidak dapat dibaca.", "LOGIN_FAILED");
+    }
+    if (loginData.output !== "ok") {
+      const reason = typeof loginData.output === "string" ? loginData.output.trim() : "";
+      throw new SpadaError(reason && reason.length <= 180 && !/<[a-z]/i.test(reason) ? reason : "NIM atau password SIAKAD salah.", "LOGIN_FAILED");
+    }
+    credentialsAccepted = true;
+
+    stage = "membuka beranda SIAKAD";
+    const dashboard = await request(`${SIAKAD_URL}/beranda`, loginResponse.cookies, {
+      headers: { Referer: `${SIAKAD_URL}/login` },
+    });
+    const ssoCookie = dashboard.cookies.find((cookie) => cookie.name === "polinema_sso");
+    if (!ssoCookie) throw new SpadaError("Sesi SSO kampus tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
+
+    stage = "membuka SSO kampus";
+    const slc = await request(SLC_URL, dashboard.cookies.filter((cookie) => cookie.name === "polinema_sso"));
+    let spadaState = slc;
+    if (!slc.cookies.some((cookie) => cookie.name === "POLIMASPADA")) {
+      stage = "membuka SPADA";
+      spadaState = await request(SPADA_URL, slc.cookies);
+    }
+    const spadaCookie = spadaState.cookies.find((cookie) => cookie.name === "POLIMASPADA");
+    if (!spadaCookie) throw new SpadaError("Sesi SPADA tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
+
+    stage = "memuat mata kuliah";
+    const courses = await request(`${SPADA_URL}?mod=matakuliah`, spadaState.cookies);
+    const coursesHtml = await courses.response.text();
+    if (/IDXPG=['"]GES['"]/i.test(coursesHtml) || (/gsi_btn/i.test(coursesHtml) && !/gallery_grid_item/i.test(coursesHtml))) {
+      throw new SpadaError("Sesi SPADA belum aktif. Ulangi login beberapa saat lagi.", "SESSION_EXPIRED");
+    }
+
+    const moodleLink = firstMoodleLink(coursesHtml);
+    if (!moodleLink) throw new SpadaError("Tautan Moodle tidak ditemukan pada SPADA.", "STRUCTURE_UNKNOWN");
+    stage = "menyiapkan sesi Moodle";
+    const bridge = await request(moodleLink, courses.cookies);
+    const bridgeHtml = await bridge.response.text();
+    const bridgeUrl = new URL(bridge.url);
+    const isMoodleLogin = bridgeUrl.hostname === new URL(MOODLE_URL).hostname && (
+      /\/login\/index\.php/i.test(bridgeUrl.pathname) || /<input\b[^>]*name=["']password["']/i.test(bridgeHtml)
+    );
+    const moodleCookie = bridge.cookies.find((cookie) => cookie.name === "MoodleSession");
+    if (isMoodleLogin || !moodleCookie) throw new SpadaError("Sesi Moodle tidak aktif. Coba login kembali.", "LOGIN_FAILED");
+
+    stage = "menyimpan sesi aplikasi";
+    await writeSpadaSession({
+      nim: cleanNim,
+      name: loginData.nama ?? loginData.name ?? `Mahasiswa ${cleanNim}`,
+      cookieHeader: cookieHeader(bridge.cookies.filter((cookie) => ["POLIMASPADA", "MoodleSession"].includes(cookie.name))),
+      connectedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const code = error instanceof SpadaError ? error.code : "REQUEST_FAILED";
+    console.error("SIAKAD login stage failed", {
+      stage,
+      credentialsAccepted,
+      code,
+      message: error instanceof Error ? error.message : "UnknownError",
+      name: error instanceof Error ? error.name : "UnknownError",
+      stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5).join("\n") : undefined,
+    });
+    if (error instanceof SpadaError) throw error;
+    throw new SpadaError(
+      credentialsAccepted
+        ? "Akun diterima, tetapi sesi kampus belum dapat dibuat. Coba lagi."
+        : "Login SIAKAD belum dapat diselesaikan. Coba lagi.",
+      "REQUEST_FAILED",
+    );
   }
-  if (loginData.output !== "ok") {
-    const reason = typeof loginData.output === "string" ? loginData.output.trim() : "";
-    throw new SpadaError(reason && reason.length <= 180 && !/<[a-z]/i.test(reason) ? reason : "NIM atau password SIAKAD salah.", "LOGIN_FAILED");
-  }
-
-  const dashboard = await request(`${SIAKAD_URL}/beranda`, loginResponse.cookies, {
-    headers: { Referer: `${SIAKAD_URL}/login` },
-  });
-  const ssoCookie = dashboard.cookies.find((cookie) => cookie.name === "polinema_sso");
-  if (!ssoCookie) throw new SpadaError("Sesi SSO kampus tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
-
-  const slc = await request(SLC_URL, dashboard.cookies.filter((cookie) => cookie.name === "polinema_sso"));
-  let spadaState = slc;
-  if (!slc.cookies.some((cookie) => cookie.name === "POLIMASPADA")) {
-    spadaState = await request(SPADA_URL, slc.cookies);
-  }
-  const spadaCookie = spadaState.cookies.find((cookie) => cookie.name === "POLIMASPADA");
-  if (!spadaCookie) throw new SpadaError("Sesi SPADA tidak diterbitkan. Coba login kembali.", "LOGIN_FAILED");
-
-  const courses = await request(`${SPADA_URL}?mod=matakuliah`, spadaState.cookies);
-  const coursesHtml = await courses.response.text();
-  if (/IDXPG=['"]GES['"]/i.test(coursesHtml) || (/gsi_btn/i.test(coursesHtml) && !/gallery_grid_item/i.test(coursesHtml))) {
-    throw new SpadaError("Sesi SPADA belum aktif. Ulangi login beberapa saat lagi.", "SESSION_EXPIRED");
-  }
-
-  const moodleLink = firstMoodleLink(coursesHtml);
-  if (!moodleLink) throw new SpadaError("Tautan Moodle tidak ditemukan pada SPADA.", "STRUCTURE_UNKNOWN");
-  const bridge = await request(moodleLink, courses.cookies);
-  const bridgeHtml = await bridge.response.text();
-  const bridgeUrl = new URL(bridge.url);
-  const isMoodleLogin = bridgeUrl.hostname === new URL(MOODLE_URL).hostname && (
-    /\/login\/index\.php/i.test(bridgeUrl.pathname) || /<input\b[^>]*name=["']password["']/i.test(bridgeHtml)
-  );
-  const moodleCookie = bridge.cookies.find((cookie) => cookie.name === "MoodleSession");
-  if (isMoodleLogin || !moodleCookie) throw new SpadaError("Sesi Moodle tidak aktif. Coba login kembali.", "LOGIN_FAILED");
-
-  await writeSpadaSession({
-    nim: cleanNim,
-    name: loginData.nama ?? loginData.name ?? `Mahasiswa ${cleanNim}`,
-    cookieHeader: cookieHeader(bridge.cookies.filter((cookie) => ["POLIMASPADA", "MoodleSession"].includes(cookie.name))),
-    connectedAt: new Date().toISOString(),
-  });
 }

@@ -62,14 +62,14 @@ const validStatuses = new Set<TaskStatus>(["todo", "doing", "done", "submitted"]
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <span className="glass-soft flex size-10 items-center justify-center rounded-2xl text-accent">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
           <path d="M8 8.5h6M8 12h6M8 15.5h3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           <path d="m15.5 16 1.6 1.6 3.2-3.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
-      <span className="text-[15px] font-semibold leading-5 text-ink">
+      <span className="text-[15px] font-medium leading-5 text-ink">
         <span className="sm:hidden">Paanz</span>
         <span className="hidden sm:inline">Paanz Task List</span>
       </span>
@@ -157,11 +157,11 @@ function SiakadLoginDialog({
       }
     }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm" />
-        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl p-6 shadow-2xl sm:p-8">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xl" />
+        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-[28px] p-5 shadow-2xl sm:p-7">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold text-ink">Masuk SIAKAD</Dialog.Title>
+              <Dialog.Title className="text-xl font-medium tracking-tight text-ink">Masuk SIAKAD</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm leading-6 text-secondary-ink">
                 Memuat mata kuliah dan tugas Anda
               </Dialog.Description>
@@ -194,7 +194,7 @@ function SiakadLoginDialog({
               </span>
             </label>
             {error ? <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-xs leading-5 text-danger">{error}</p> : null}
-            <button type="submit" disabled={submitting} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent transition-colors hover:brightness-95 disabled:opacity-60">
+            <button type="submit" disabled={submitting} className="primary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-60">
               {submitting ? <LoaderCircle size={16} className="animate-spin" /> : <LogIn size={16} />}
               {submitting ? "Menghubungkan ke SIAKAD" : "Masuk dan muat tugas"}
             </button>
@@ -509,7 +509,7 @@ export function TaskDashboard({
   return (
     <div className="min-h-screen">
       <header className="glass sticky top-0 z-30 border-b">
-        <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex h-[68px] max-w-6xl items-center gap-3 px-4 sm:px-6">
           <Brand />
           <label className="relative ml-auto hidden w-full max-w-sm md:block">
             <span className="sr-only">Cari tugas</span>
@@ -535,7 +535,7 @@ export function TaskDashboard({
                 </button>
                 <button
                   type="button"
-                  className="hidden min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent transition-[background-color,transform] hover:brightness-95 active:scale-[0.98] disabled:opacity-60 md:inline-flex"
+                  className="primary-action hidden min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-60 md:inline-flex"
                   disabled={syncing}
                   onClick={() => void handleSync()}
                 >
@@ -547,13 +547,13 @@ export function TaskDashboard({
             <ThemeToggle />
             {account ? (
               <div className="flex items-center gap-1">
-                <div className="hidden size-10 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent sm:flex" aria-label={account.name}>
+                <div className="hidden size-10 items-center justify-center rounded-full bg-accent-soft text-xs font-medium text-accent sm:flex" aria-label={account.name}>
                   {initials(account.name, account.nim)}
                 </div>
                 <button className="icon-button" type="button" aria-label="Keluar dari akun" onClick={() => void handleLogout()}><LogOut size={18} /></button>
               </div>
             ) : (
-              <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface-raised px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-subtle sm:px-4" onClick={() => setLoginOpen(true)}>
+              <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface-raised px-3 text-sm font-medium text-ink shadow-[inset_0_1px_0_var(--glass-rim)] transition-colors hover:bg-surface-subtle sm:px-4" onClick={() => setLoginOpen(true)}>
                 <LogIn size={16} /> <span className="hidden sm:inline">Masuk SIAKAD</span><span className="sm:hidden">Masuk</span>
               </button>
             )}
@@ -572,7 +572,7 @@ export function TaskDashboard({
         <section className="task-enter flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-ink sm:text-3xl">Tugas saya</h1>
+              <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Tugas saya</h1>
               {!connected ? <span className="rounded-lg bg-surface-subtle px-2 py-1 text-[11px] text-muted-ink">Contoh</span> : null}
             </div>
             <p className="mt-2 text-sm text-secondary-ink">{counts.total} tugas · {courses.length} mata kuliah</p>
@@ -587,17 +587,17 @@ export function TaskDashboard({
         {syncError ? (
           <section role="alert" className="glass-soft task-enter mt-6 flex flex-col gap-4 rounded-2xl border-danger/20 p-4 sm:flex-row sm:items-center sm:p-5">
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink">Tugas belum berhasil dimuat</h2>
+              <h2 className="text-sm font-medium text-ink">Tugas belum berhasil dimuat</h2>
               <p className="mt-1 text-xs leading-5 text-secondary-ink">{syncError}</p>
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
               {syncErrorCode === "AUTH_REQUIRED" || syncErrorCode === "SESSION_EXPIRED" ? (
-                <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent" onClick={() => setLoginOpen(true)}>
+                <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent" onClick={() => setLoginOpen(true)}>
                   <LogIn size={16} /> Masuk kembali
                 </button>
               ) : null}
               <button type="button" className={cn(
-                "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors",
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors",
                 syncErrorCode === "AUTH_REQUIRED" || syncErrorCode === "SESSION_EXPIRED"
                   ? "border border-line bg-surface-raised text-ink hover:bg-surface-subtle"
                   : "bg-accent text-on-accent",
@@ -608,44 +608,42 @@ export function TaskDashboard({
           </section>
         ) : null}
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-3" aria-label="Ringkasan tugas">
-          <div className="glass-soft task-enter flex items-center gap-4 rounded-2xl p-5">
-            <div className="relative size-14 shrink-0">
-              <svg viewBox="0 0 44 44" className="size-14 -rotate-90" aria-hidden="true">
-                <circle cx="22" cy="22" r="18" fill="none" stroke="var(--border)" strokeWidth="3" />
-                <circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${counts.progress} ${100 - counts.progress}`} />
+        <section className="mt-6 grid gap-4 md:grid-cols-12" aria-label="Ringkasan tugas">
+          <div className="glass task-enter flex items-center gap-5 rounded-[24px] p-5 md:col-span-6 sm:p-6">
+            <div className="relative size-16 shrink-0">
+              <svg viewBox="0 0 48 48" className="size-16 -rotate-90" aria-hidden="true">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border)" strokeWidth="3" />
+                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${counts.progress} ${100 - counts.progress}`} />
               </svg>
-              <span className="absolute inset-0 flex items-center justify-center font-mono text-[11px] font-medium tabular-nums text-ink">{counts.progress}%</span>
+              <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-medium tabular-nums text-ink">{counts.progress}%</span>
             </div>
-            <div>
-              <div className="text-xs text-muted-ink">Progres</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-ink">{counts.done}<span className="text-base font-normal text-muted-ink"> / {counts.total}</span></div>
-              <div className="mt-1 text-xs text-secondary-ink">selesai</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-muted-ink">Progres tugas</div>
+              <div className="mt-1 text-3xl font-medium tabular-nums text-ink">{counts.done}<span className="text-lg font-normal text-muted-ink"> / {counts.total}</span></div>
+              <div className="mt-1 text-xs text-secondary-ink">selesai dan sudah dikumpulkan</div>
             </div>
           </div>
-          <div className="glass-soft task-enter rounded-2xl p-5">
+          <div className="quiet-stat task-enter rounded-[24px] p-5 md:col-span-3 sm:p-6">
             <div className="text-xs text-muted-ink">Tenggat dekat</div>
-            <div className="mt-3 text-3xl font-semibold tabular-nums text-ink">{counts.dueSoon}</div>
+            <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.dueSoon}</div>
             <div className="mt-2 text-xs text-secondary-ink">dalam 3 hari</div>
           </div>
-          <div className="glass-soft task-enter rounded-2xl p-5">
+          <div className="quiet-stat task-enter rounded-[24px] p-5 md:col-span-3 sm:p-6">
             <div className="text-xs text-muted-ink">Dikumpulkan</div>
-            <div className="mt-3 text-3xl font-semibold tabular-nums text-ink">{counts.submitted}</div>
+            <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.submitted}</div>
             <div className="mt-2 text-xs text-secondary-ink">terkonfirmasi SPADA</div>
           </div>
         </section>
 
         <section className="mt-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="grid grid-cols-4 gap-2 sm:flex" role="group" aria-label="Filter status tugas">
+            <div className="segmented-control grid grid-cols-4 gap-1 rounded-2xl p-1 sm:inline-flex" role="group" aria-label="Filter status tugas">
               {filterItems.map((item) => (
                 <button
                   key={item.value}
                   type="button"
-                  className={cn(
-                    "inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-2 text-[11px] font-medium transition-colors sm:shrink-0 sm:px-3 sm:text-xs",
-                    statusFilter === item.value ? "border-accent/30 bg-accent-soft text-accent" : "border-line bg-surface text-secondary-ink hover:bg-surface-subtle hover:text-ink",
-                  )}
+                  aria-pressed={statusFilter === item.value}
+                  className="segmented-item inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-2 text-[11px] font-medium sm:shrink-0 sm:px-3 sm:text-xs"
                   onClick={() => setStatusFilter(item.value)}
                 >
                   {item.value === "all" ? <LayoutList size={15} className="hidden sm:block" /> : item.value === "todo" ? <Circle size={15} className="hidden sm:block" /> : item.value === "doing" ? <LoaderCircle size={15} className="hidden sm:block" /> : <CheckCircle2 size={15} className="hidden sm:block" />}
@@ -676,7 +674,7 @@ export function TaskDashboard({
           {!filteredTasks.length ? (
             <div className="glass-soft rounded-2xl px-6 py-12 text-center">
               <Search size={24} className="mx-auto mb-3 text-muted-ink" />
-              <h2 className="text-sm font-semibold text-ink">Tugas tidak ditemukan</h2>
+              <h2 className="text-sm font-medium text-ink">Tugas tidak ditemukan</h2>
               <p className="mt-2 text-xs leading-5 text-secondary-ink">Ubah kata kunci atau filter</p>
               <button type="button" className="mt-4 min-h-11 rounded-xl px-4 text-xs font-medium text-accent" onClick={() => { setQuery(""); setStatusFilter("all"); setCourseFilter("all"); }}>Reset filter</button>
             </div>

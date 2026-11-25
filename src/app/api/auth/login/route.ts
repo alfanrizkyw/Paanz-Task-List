@@ -54,10 +54,14 @@ export async function POST(request: Request) {
       console.warn("SIAKAD login failed", { code: error.code, message: error.message });
       return Response.json(
         { ok: false, code: error.code, message: error.message },
-        { status: error.code === "LOGIN_FAILED" ? 401 : 400, headers: { "Cache-Control": "no-store" } },
+        { status: error.code === "LOGIN_FAILED" ? 401 : error.code === "REQUEST_FAILED" ? 502 : 400, headers: { "Cache-Control": "no-store" } },
       );
     }
-    console.error("SIAKAD login failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    console.error("SIAKAD login failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : "UnknownError",
+      stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5).join("\n") : undefined,
+    });
     return Response.json(
       { ok: false, code: "REQUEST_FAILED", message: "Login SIAKAD gagal. Coba lagi nanti." },
       { status: 500, headers: { "Cache-Control": "no-store" } },
