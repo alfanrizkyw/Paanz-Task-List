@@ -104,61 +104,22 @@ body {
   background: var(--background);
 }
 
-.aurora {
+.particle-wave {
   position: fixed;
   z-index: 0;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.16;
   contain: strict;
+  opacity: 0.82;
 }
 
-.aurora-ribbon {
-  position: absolute;
-  width: 72vw;
-  height: 26vw;
-  min-height: 240px;
-  max-height: 480px;
-  border-radius: 50%;
-  filter: blur(80px);
-  will-change: transform;
-  animation-timing-function: var(--ease-ios);
-  animation-iteration-count: infinite;
+.particle-wave canvas {
+  display: block;
 }
 
-.aurora-ribbon-a {
-  top: -22%;
-  left: -18%;
-  background: linear-gradient(102deg, transparent 4%, rgba(64, 112, 190, 0.12) 38%, rgba(64, 112, 190, 0.04) 72%, transparent 96%);
-  animation-name: aurora-a;
-  animation-duration: 34s;
-}
-
-.aurora-ribbon-b {
-  right: -28%;
-  bottom: -34%;
-  background: linear-gradient(96deg, transparent 2%, rgba(64, 112, 190, 0.08) 42%, rgba(64, 112, 190, 0.03) 76%, transparent 96%);
-  animation-name: aurora-b;
-  animation-duration: 42s;
-}
-
-.dark .aurora {
-  opacity: 0.22;
-}
-
-.dark .aurora-ribbon {
-  mix-blend-mode: screen;
-}
-
-@keyframes aurora-a {
-  0%, 100% { transform: translate3d(-2%, 0, 0) rotate(-12deg) scale(1); }
-  50% { transform: translate3d(14%, 10%, 0) rotate(-5deg) scale(1.08); }
-}
-
-@keyframes aurora-b {
-  0%, 100% { transform: translate3d(4%, 4%, 0) rotate(10deg) scale(1.04); }
-  50% { transform: translate3d(-14%, -8%, 0) rotate(3deg) scale(0.96); }
+.dark .particle-wave {
+  opacity: 0.92;
 }
 
 h1,

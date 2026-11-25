@@ -27,13 +27,22 @@ export function formatSyncTime(value?: string) {
   }).format(new Date(value));
 }
 
-export function getDeadlineState(value?: string): { tone: "danger" | "warning" | "accent"; label: string; hours: number } {
-  if (!value) return { tone: "accent", label: "Tanpa deadline", hours: Number.POSITIVE_INFINITY };
-  const hours = (new Date(value).getTime() - Date.now()) / 3_600_000;
-  if (hours < 0) return { tone: "danger", label: "Terlambat", hours };
-  if (hours <= 24) return { tone: "warning", label: "Hari ini", hours };
-  if (hours <= 72) return { tone: "warning", label: "≤ 3 hari", hours };
-  return { tone: "accent", label: "Akan datang", hours };
+export type DeadlineTone = "danger" | "warning" | "accent" | "success";
+
+export function getDeadlineState(value?: string, status?: TaskStatus, submittedAt?: string): { tone: DeadlineTone; label: string; hours: number; isLate: boolean } {
+  if (!value) return { tone: status === "submitted" ? "success" : "accent", label: status === "submitted" ? "Dikumpulkan" : "Tanpa deadline", hours: Number.POSITIVE_INFINITY, isLate: false };
+  const dueTime = new Date(value).getTime();
+  if (status === "submitted") {
+    const submissionTime = submittedAt ? Date.parse(submittedAt) : Number.NaN;
+    const isLate = Number.isFinite(submissionTime) && submissionTime > dueTime;
+    const comparisonTime = Number.isFinite(submissionTime) ? submissionTime : Date.now();
+    return { tone: "success", label: isLate ? "Terlambat · sudah dikumpulkan" : "Dikumpulkan", hours: (dueTime - comparisonTime) / 3_600_000, isLate };
+  }
+  const hours = (dueTime - Date.now()) / 3_600_000;
+  if (hours < 0) return { tone: "danger", label: "Terlambat · belum dikumpulkan", hours, isLate: true };
+  if (hours <= 24) return { tone: "warning", label: "Hari ini", hours, isLate: false };
+  if (hours <= 72) return { tone: "warning", label: "≤ 3 hari", hours, isLate: false };
+  return { tone: "accent", label: "Akan datang", hours, isLate: false };
 }
 
 export const statusLabels: Record<TaskStatus, string> = {

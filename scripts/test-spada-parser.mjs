@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const source = `${readFileSync(resolve(root, "src/lib/spada.ts"), "utf8")}\nexport { courseCards, cardTitle, extractLinks, parseSpadaTree, parseMoodleDate, submissionStatus, tableRows, taskTitle };`;
+const source = `${readFileSync(resolve(root, "src/lib/spada.ts"), "utf8")}\nexport { courseCards, cardTitle, extractLinks, parseMoodleDate, parseSpadaTree, parseTaskAttachments, submissionStatus, tableRows, taskTitle };`;
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
@@ -27,6 +27,7 @@ const {
   extractLinks,
   parseSpadaTree,
   parseMoodleDate,
+  parseTaskAttachments,
   submissionStatus,
   tableRows,
   taskTitle,
@@ -101,6 +102,24 @@ const status = rows.find((cells) => cells[0] === "Submission status")?.[1] ?? ""
 assert.equal(parseMoodleDate(due), "2026-11-20T17:00:00.000Z");
 assert.equal(parseMoodleDate("Kamis, 24 September 2026 Jam 08:00:00"), "2026-09-24T01:00:00.000Z");
 assert.equal(submissionStatus(status), "todo");
+
+const attachmentsHtml = `
+  <div id="intro"><a href="/pluginfile.php/1/assign/intro/Modul%20Praktikum.pdf">Modul Praktikum.pdf <span>240 KB</span></a></div>
+  <div class="submissionfiles"><a href="https://lmsslc.polinema.ac.id/pluginfile.php/1/assign/submission_files/Tugas_Alya.zip">Tugas_Alya.zip <span>1,2 MB</span></a></div>
+  <a href="https://example.com/pluginfile.php/1/assign/intro/eksternal.pdf">Eksternal</a>`;
+const attachments = parseTaskAttachments(attachmentsHtml, "https://lmsslc.polinema.ac.id/mod/assign/view.php?id=12345");
+assert.equal(attachments.instructorFiles.length, 1);
+assert.equal(attachments.instructorFiles[0].name, "Modul Praktikum.pdf");
+assert.equal(attachments.instructorFiles[0].size, "240 KB");
+assert.match(attachments.instructorFiles[0].url, /assign\/intro\/Modul%20Praktikum\.pdf$/);
+assert.equal(attachments.submissionFiles.length, 1);
+assert.equal(attachments.submissionFiles[0].name, "Tugas_Alya.zip");
+assert.equal(attachments.submissionFiles[0].size, "1,2 MB");
+const unsafePortAttachments = parseTaskAttachments(
+  '<a href="https://lmsslc.polinema.ac.id:444/pluginfile.php/1/assign/intro/tidak-aman.pdf">Tidak aman</a>',
+  "https://lmsslc.polinema.ac.id/mod/assign/view.php?id=12345",
+);
+assert.equal(unsafePortAttachments.instructorFiles.length, 0);
 
 const liveDashboardPath = resolve(root, ".data/spada-live.html");
 if (existsSync(liveDashboardPath)) {

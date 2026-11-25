@@ -16,17 +16,18 @@ const deadlineLine = {
   danger: "bg-danger",
   warning: "bg-warning",
   accent: "bg-accent",
+  success: "bg-success",
 };
 
 const statusStyle: Record<TaskStatus, string> = {
   todo: "text-secondary-ink",
   doing: "text-warning",
   done: "text-success",
-  submitted: "text-accent",
+  submitted: "text-success",
 };
 
 export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCardProps) {
-  const deadline = getDeadlineState(task.dueAt);
+  const deadline = getDeadlineState(task.dueAt, task.status, task.submittedAt);
   const nextStatus: TaskStatus = task.status === "todo" ? "doing" : task.status === "doing" ? "done" : "todo";
 
   return (
@@ -57,7 +58,10 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
                 <span className="font-mono tabular-nums">Tanpa deadline</span>
               )}
             </span>
-            <span className={cn("font-medium", deadline.tone === "danger" ? "text-danger" : deadline.tone === "warning" ? "text-warning" : "text-muted-ink")}>
+            <span className={cn(
+              "font-medium",
+              deadline.tone === "danger" ? "text-danger" : deadline.tone === "warning" ? "text-warning" : deadline.tone === "success" ? "text-success" : "text-muted-ink",
+            )}>
               {deadline.label}
             </span>
           </div>

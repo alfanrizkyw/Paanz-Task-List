@@ -3,14 +3,16 @@ import "server-only";
 import { existsSync } from "node:fs";
 import type { Browser } from "playwright-core";
 import { readSpadaSession, writeSpadaSession, type SpadaSession } from "@/lib/spada-session";
-import type { Course, SyncPayload, Task, TaskKind, TaskStatus } from "@/lib/types";
+import type { Course, SyncPayload, Task, TaskAttachment, TaskKind, TaskStatus } from "@/lib/types";
 
 const BASE_URL = process.env.SPADA_BASE_URL ?? "https://slc.polinema.ac.id/spada/";
 const MOODLE_URL = process.env.MOODLE_BASE_URL ?? "https://lmsslc.polinema.ac.id";
+const MOODLE_ORIGIN = new URL(MOODLE_URL).origin;
+const SPADA_ORIGIN = new URL(BASE_URL).origin;
 const MOODLE_HOST = new URL(MOODLE_URL).hostname;
-const SPADA_HOST = new URL(BASE_URL).hostname;
 const MAX_COURSES = 30;
 const MAX_TASKS = 120;
+const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
 export class SpadaError extends Error {
   constructor(
@@ -21,6 +23,8 @@ export class SpadaError extends Error {
       | "SESSION_EXPIRED"
       | "STRUCTURE_UNKNOWN"
       | "FORM_NOT_FOUND"
+      | "FILE_NOT_FOUND"
+      | "FILE_TOO_LARGE"
       | "ALREADY_SUBMITTED"
       | "SUBMIT_UNCONFIRMED"
       | "REQUEST_FAILED",
@@ -70,7 +74,16 @@ function absoluteUrl(value: string, base: string) {
 function isCampusUrl(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && [SPADA_HOST, MOODLE_HOST].includes(url.hostname);
+    return url.protocol === "https:" && !url.username && !url.password && [SPADA_ORIGIN, MOODLE_ORIGIN].includes(url.origin);
+  } catch {
+    return false;
+  }
+}
+
+function isMoodleUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && url.origin === MOODLE_ORIGIN;
   } catch {
     return false;
   }
@@ -254,6 +267,30 @@ function descriptionFrom(html: string) {
   return intro ? stripHtml(intro).slice(0, 800) : "";
 }
 
+function attachmentName(href: string, text: string) {
+  const rawName = href.split(/[?#]/)[0].split("/").filter(Boolean).at(-1) ?? "";
+  const fallback = decodeEntities(decodeUriValue(rawName));
+  return stripHtml(text).replace(/\s*[\d.,]+\s*(?:bytes?|kb|mb)\s*$/i, "").trim() || fallback || "Berkas";
+}
+
+function parseTaskAttachments(html: string, pageUrl: string) {
+  const instructorFiles: TaskAttachment[] = [];
+  const submissionFiles: TaskAttachment[] = [];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = absoluteUrl(attribute(match[1], "href"), pageUrl);
+    if (!href || !isCampusUrl(href) || !/\/pluginfile\.php\/\d+\/assign\/(?:intro|submission_files)\//i.test(href)) continue;
+    const text = stripHtml(match[2]);
+    const attachment: TaskAttachment = {
+      name: attachmentName(href, text).slice(0, 240),
+      url: href,
+      ...(text.match(/\b[\d.,]+\s*(?:bytes?|kb|mb)\b/i)?.[0] ? { size: text.match(/\b[\d.,]+\s*(?:bytes?|kb|mb)\b/i)![0] } : {}),
+    };
+    const destination = /\/assign\/submission_files\//i.test(href) ? submissionFiles : instructorFiles;
+    if (!destination.some((item) => item.url === href)) destination.push(attachment);
+  }
+  return { instructorFiles: instructorFiles.slice(0, 30), submissionFiles: submissionFiles.slice(0, 30) };
+}
+
 interface SpadaTreeAnswer {
   status?: string;
   timemodified?: string;
@@ -351,7 +388,10 @@ interface TaskDetails {
   dueAt?: string;
   status: TaskStatus;
   description?: string;
+  submittedAt?: string;
   submittable: boolean;
+  instructorFiles: TaskAttachment[];
+  submissionFiles: TaskAttachment[];
   html: string;
   url: string;
 }
@@ -365,6 +405,8 @@ async function readTaskDetails(value: string, session: SpadaSession): Promise<Ta
   const rows = tableRows(page.html);
   const dueRow = rows.find((cells) => /^(?:due date|deadline|batas waktu|batas akhir)$/i.test(cells[0] ?? ""));
   const statusRow = rows.find((cells) => /^(?:submission status|status pengumpulan)$/i.test(cells[0] ?? ""));
+  const submittedRow = rows.find((cells) => /^(?:last modified|submission date|waktu pengumpulan|tanggal pengumpulan)$/i.test(cells[0] ?? ""));
+  const attachments = parseTaskAttachments(page.html, page.url);
   const plain = stripHtml(page.html);
   const quizDate = plain.match(/(?:quiz closes|due date|batas waktu|ditutup pada)[\s:.-]*([^.]{0,140})/i)?.[1];
   const quizStatusRow = rows.find((cells) => /^(?:attempt status|status percobaan|status)$/i.test(cells[0] ?? ""));
@@ -379,7 +421,9 @@ async function readTaskDetails(value: string, session: SpadaSession): Promise<Ta
     dueAt: parseMoodleDate(dueRow?.[1] ?? quizDate ?? ""),
     status: isAssignment ? submissionStatus(statusRow?.[1] ?? "") : submissionStatus(quizStatusRow?.[1] ?? plain),
     description: descriptionFrom(page.html),
+    submittedAt: submittedRow?.[1] ? parseMoodleDate(submittedRow[1]) : undefined,
     submittable: isAssignment,
+    ...attachments,
     html: page.html,
     url: page.url,
   };
@@ -473,7 +517,9 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
 
   const treeCourseIds = new Map<string, string>();
   for (const course of tree.courses) {
-    const existing = courses.find((item) => slug(item.name) === slug(course.name));
+    const sameName = courses.filter((item) => slug(item.name) === slug(course.name));
+    const sameTreeName = tree.courses.filter((item) => slug(item.name) === slug(course.name));
+    const existing = courses.find((item) => item.id === course.id) ?? (sameName.length === 1 && sameTreeName.length === 1 ? sameName[0] : undefined);
     if (existing) {
       treeCourseIds.set(course.id, existing.id);
       continue;
@@ -493,7 +539,11 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
   const limitedLinks = extraLinks.slice(0, remaining);
   if (extraLinks.length > remaining) incomplete = true;
 
-  const taskResults = await mapLimit(limitedLinks, 5, async (request) => {
+  const detailRequests = new Map<string, { url: string; courseId: string }>();
+  for (const [url, task] of tasks) detailRequests.set(url, { url, courseId: task.courseId });
+  for (const request of limitedLinks) detailRequests.set(request.url, request);
+
+  const taskResults = await mapLimit([...detailRequests.values()], 5, async (request) => {
     try {
       return { request, detail: await readTaskDetails(request.url, session) };
     } catch (error) {
@@ -505,16 +555,21 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
 
   for (const { request, detail } of taskResults) {
     if (!detail) continue;
+    const existing = tasks.get(request.url);
+    const title = existing?.title || detail.title;
     tasks.set(request.url, {
       id: request.url,
       courseId: request.courseId,
-      title: detail.title,
-      kind: taskKind(detail.title, detail.url),
-      dueAt: detail.dueAt,
+      title,
+      kind: taskKind(title, detail.url),
+      dueAt: detail.dueAt ?? existing?.dueAt,
       status: detail.status,
       sourceUrl: detail.url,
-      description: detail.description,
+      description: detail.description || existing?.description,
+      submittedAt: detail.submittedAt ?? existing?.submittedAt,
       submittable: detail.submittable,
+      instructorFiles: detail.instructorFiles,
+      submissionFiles: detail.submissionFiles,
     });
   }
 
@@ -538,6 +593,87 @@ function canonicalAssignmentUrl(value: string) {
     throw new SpadaError("Tautan tugas bukan halaman pengumpulan Moodle yang valid.", "FORM_NOT_FOUND");
   }
   return `${MOODLE_URL}/mod/assign/view.php?id=${id}`;
+}
+
+export async function downloadSpadaTaskFile(taskUrlValue: string, fileUrlValue: string) {
+  const session = await readSpadaSession();
+  if (!session) throw new SpadaError("Masuk dengan akun SIAKAD terlebih dahulu.", "AUTH_REQUIRED");
+
+  const taskUrl = canonicalAssignmentUrl(taskUrlValue);
+  const fileUrl = absoluteUrl(fileUrlValue, taskUrl);
+  if (!fileUrl || !isMoodleUrl(fileUrl) || !/\/pluginfile\.php\/\d+\/assign\/(?:intro|submission_files)\//i.test(fileUrl)) {
+    throw new SpadaError("Berkas tugas tidak valid.", "FILE_NOT_FOUND");
+  }
+
+  const detail = await readTaskDetails(taskUrl, session);
+  const attachment = [...detail.instructorFiles, ...detail.submissionFiles].find((item) => item.url === fileUrl);
+  if (!attachment) throw new SpadaError("Berkas tidak ditemukan pada tugas ini.", "FILE_NOT_FOUND");
+
+  let currentUrl = fileUrl;
+  for (let redirects = 0; redirects < 6; redirects += 1) {
+    if (!isMoodleUrl(currentUrl)) {
+      throw new SpadaError("Tautan unduhan tidak aman.", "FILE_NOT_FOUND");
+    }
+    let response: Response;
+    try {
+      response = await fetch(currentUrl, {
+        headers: {
+          Cookie: cookiesForHost(MOODLE_HOST, session.cookieHeader),
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36",
+          "Accept": "*/*",
+        },
+        cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch {
+      throw new SpadaError("Berkas kampus belum dapat diunduh.", "REQUEST_FAILED");
+    }
+
+    const location = response.headers.get("location");
+    if ([301, 302, 303, 307, 308].includes(response.status) && location) {
+      await response.body?.cancel();
+      currentUrl = absoluteUrl(location, currentUrl);
+      continue;
+    }
+    if (response.status === 404) throw new SpadaError("Berkas sudah tidak tersedia di SPADA.", "FILE_NOT_FOUND");
+    if (response.status === 413 || Number(response.headers.get("content-length")) > MAX_DOWNLOAD_BYTES) {
+      await response.body?.cancel();
+      throw new SpadaError("Ukuran berkas melebihi batas unduhan 20 MB.", "FILE_TOO_LARGE");
+    }
+    if (!response.ok || !response.body) {
+      await response.body?.cancel();
+      throw new SpadaError("Berkas kampus gagal diunduh.", "REQUEST_FAILED");
+    }
+
+    const sourceType = response.headers.get("content-type")?.toLowerCase() ?? "application/octet-stream";
+    const contentType = /text\/html|javascript|image\/svg/.test(sourceType) ? "application/octet-stream" : sourceType;
+    const safeName = attachment.name.replace(/[^\w.()-]+/g, "-").slice(0, 120) || "berkas";
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_DOWNLOAD_BYTES) {
+        await reader.cancel();
+        throw new SpadaError("Ukuran berkas melebihi batas unduhan 20 MB.", "FILE_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+
+    return new Response(Buffer.concat(chunks), {
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+        "Content-Length": String(received),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  throw new SpadaError("Terlalu banyak pengalihan saat mengunduh berkas.", "REQUEST_FAILED");
 }
 
 async function launchSubmissionBrowser(): Promise<Browser> {
@@ -705,5 +841,10 @@ export async function submitSpadaTask(input: {
     throw new SpadaError("Status berubah, tetapi jawaban teks belum terlihat pada pengumpulan. Periksa SPADA sebelum mencoba lagi.", "SUBMIT_UNCONFIRMED");
   }
 
-  return { submittedAt: new Date().toISOString(), sourceUrl: taskUrl };
+  return {
+    submittedAt: new Date().toISOString(),
+    sourceUrl: taskUrl,
+    instructorFiles: verified.instructorFiles,
+    submissionFiles: verified.submissionFiles,
+  };
 }

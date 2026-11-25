@@ -2,6 +2,7 @@
 
 import {
   ArrowUpRight,
+  BookOpen,
   CheckCircle2,
   Circle,
   CircleAlert,
@@ -34,7 +35,7 @@ import {
   parseTaskState,
   statusMap,
 } from "@/lib/task-state";
-import type { Course, SpadaConnection, SyncPayload, Task, TaskState, TaskStatus, TaskStatusEntry } from "@/lib/types";
+import type { Course, SpadaConnection, SyncPayload, Task, TaskAttachment, TaskState, TaskStatus, TaskStatusEntry } from "@/lib/types";
 import { cn, formatDeadline, formatSyncTime, getDeadlineState } from "@/lib/utils";
 
 interface DashboardUser {
@@ -52,11 +53,24 @@ interface TaskDashboardProps {
 type StatusFilter = "all" | TaskStatus;
 type CloudStatus = "loading" | "saving" | "saved" | "offline" | "error";
 
+interface AccountRequest {
+  nim: string;
+  generation: number;
+  controller: AbortController;
+}
+
+interface PendingCloudSave {
+  state: TaskState;
+  nim: string;
+  generation: number;
+}
+
 const filterItems: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "Semua" },
   { value: "todo", label: "Belum" },
   { value: "doing", label: "Dikerjakan" },
   { value: "done", label: "Selesai" },
+  { value: "submitted", label: "Dikumpul" },
 ];
 
 const validStatuses = new Set<TaskStatus>(["todo", "doing", "done", "submitted"]);
@@ -64,6 +78,7 @@ const previewDeadlineLine = {
   danger: "bg-danger",
   warning: "bg-warning",
   accent: "bg-accent",
+  success: "bg-success",
 };
 
 function Brand() {
@@ -226,7 +241,7 @@ function SiakadLoginDialog({
             <div className="mt-6 space-y-3">
               {previewTasks.slice(0, 3).map((task) => {
                 const course = previewCourses.find((item) => item.id === task.courseId);
-                const deadline = getDeadlineState(task.dueAt);
+                const deadline = getDeadlineState(task.dueAt, task.status, task.submittedAt);
                 return (
                   <div key={task.id} className="login-preview-card relative overflow-hidden rounded-2xl p-4 pl-5">
                     <span className={cn("deadline-line", previewDeadlineLine[deadline.tone])} />
@@ -275,17 +290,20 @@ export function TaskDashboard({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncPartial, setSyncPartial] = useState(false);
   const [syncError, setSyncError] = useState("");
   const [syncErrorCode, setSyncErrorCode] = useState<string | undefined>();
   const [stateReady, setStateReady] = useState(!user);
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>(user ? "loading" : "offline");
   const router = useRouter();
   const taskStateRef = useRef(taskState);
-  const syncInFlight = useRef(false);
-  const autoSyncStarted = useRef(false);
+  const accountGenerationRef = useRef(0);
+  const activeNimRef = useRef(user?.nim ?? null);
+  const requestControllersRef = useRef(new Set<AbortController>());
+  const syncInFlight = useRef<AccountRequest | null>(null);
   const cloudSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cloudSaveInFlight = useRef(false);
-  const pendingCloudSave = useRef<TaskState | null>(null);
+  const cloudSaveInFlight = useRef<AccountRequest | null>(null);
+  const pendingCloudSave = useRef<PendingCloudSave | null>(null);
 
   const tasks = useMemo(() => taskState.cache?.tasks ?? (connected ? [] : initialTasks), [taskState.cache, connected, initialTasks]);
   const courses = useMemo(() => taskState.cache?.courses ?? (connected ? [] : initialCourses), [taskState.cache, connected, initialCourses]);
@@ -297,47 +315,74 @@ export function TaskDashboard({
     setTaskState(next);
   }, []);
 
-  const saveCloudState = useCallback(async function persist(state: TaskState) {
-    const nim = account?.nim;
-    if (!nim) return;
+  const invalidateAccountRequests = useCallback(() => {
+    accountGenerationRef.current += 1;
+    for (const controller of requestControllersRef.current) controller.abort();
+    requestControllersRef.current.clear();
+    if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    cloudSaveTimer.current = null;
+    cloudSaveInFlight.current = null;
+    pendingCloudSave.current = null;
+    syncInFlight.current = null;
+    setSyncing(false);
+  }, []);
+
+  const saveCloudState = useCallback(async function persist(state: TaskState, nim = account?.nim, generation = accountGenerationRef.current) {
+    if (!nim || activeNimRef.current !== nim || accountGenerationRef.current !== generation) return;
     if (cloudSaveInFlight.current) {
-      pendingCloudSave.current = state;
+      pendingCloudSave.current = { state, nim, generation };
       return;
     }
 
-    cloudSaveInFlight.current = true;
+    const controller = new AbortController();
+    const operation: AccountRequest = { nim, generation, controller };
+    cloudSaveInFlight.current = operation;
+    requestControllersRef.current.add(controller);
     setCloudStatus("saving");
+    const isCurrent = () => cloudSaveInFlight.current === operation
+      && activeNimRef.current === nim
+      && accountGenerationRef.current === generation;
     try {
       const response = await fetch("/api/task-state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state),
+        signal: controller.signal,
       });
       const result = (await response.json()) as { ok: boolean; configured?: boolean; state?: unknown; message?: string };
+      if (!isCurrent()) return;
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Data belum tersimpan.");
       const remote = parseTaskState(result.state);
       if (remote) applyTaskState(mergeTaskStates(taskStateRef.current, remote));
       setCloudStatus(result.configured === false ? "offline" : "saved");
     } catch {
-      setCloudStatus("error");
+      if (isCurrent()) setCloudStatus("error");
     } finally {
-      cloudSaveInFlight.current = false;
-      const pending = pendingCloudSave.current;
-      pendingCloudSave.current = null;
-      if (pending) void persist(pending);
+      requestControllersRef.current.delete(controller);
+      if (cloudSaveInFlight.current === operation) {
+        cloudSaveInFlight.current = null;
+        const pending = pendingCloudSave.current;
+        pendingCloudSave.current = null;
+        if (pending) void persist(pending.state, pending.nim, pending.generation);
+      }
     }
   }, [account?.nim, applyTaskState]);
 
   const queueCloudSave = useCallback(() => {
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    const nim = activeNimRef.current;
+    const generation = accountGenerationRef.current;
     cloudSaveTimer.current = setTimeout(() => {
-      void saveCloudState(taskStateRef.current);
+      cloudSaveTimer.current = null;
+      if (nim && activeNimRef.current === nim && accountGenerationRef.current === generation) {
+        void saveCloudState(taskStateRef.current, nim, generation);
+      }
     }, 250);
   }, [saveCloudState]);
 
   const commitTaskState = useCallback((next: TaskState) => {
     applyTaskState(next);
-    const nim = account?.nim;
+    const nim = activeNimRef.current;
     if (!nim) return;
     try {
       localStorage.setItem(`paanz-state:${nim}`, JSON.stringify(next));
@@ -345,7 +390,7 @@ export function TaskDashboard({
       return;
     }
     queueCloudSave();
-  }, [account?.nim, applyTaskState, queueCloudSave]);
+  }, [applyTaskState, queueCloudSave]);
 
   useEffect(() => {
     const nim = account?.nim;
@@ -354,6 +399,9 @@ export function TaskDashboard({
     let cancelled = false;
     let localApplied = false;
     let migrationChecked = false;
+    const controller = new AbortController();
+    const requestControllers = requestControllersRef.current;
+    requestControllers.add(controller);
     const local = readLocalTaskState(nim);
 
     function currentState() {
@@ -364,7 +412,7 @@ export function TaskDashboard({
 
     async function refreshCloudState() {
       try {
-        const response = await fetch("/api/task-state", { cache: "no-store" });
+        const response = await fetch("/api/task-state", { cache: "no-store", signal: controller.signal });
         const result = (await response.json()) as { ok: boolean; configured?: boolean; state?: unknown };
         if (!response.ok || !result.ok) throw new Error("Cloud state unavailable");
         if (cancelled) return;
@@ -404,13 +452,21 @@ export function TaskDashboard({
 
     return () => {
       cancelled = true;
+      controller.abort();
+      requestControllers.delete(controller);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
   }, [account?.nim, applyTaskState, saveCloudState]);
 
   useEffect(() => () => {
+    accountGenerationRef.current += 1;
+    for (const controller of requestControllersRef.current) controller.abort();
+    requestControllersRef.current.clear();
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    cloudSaveInFlight.current = null;
+    pendingCloudSave.current = null;
+    syncInFlight.current = null;
   }, []);
 
   const tasksWithStatus = useMemo(
@@ -419,19 +475,29 @@ export function TaskDashboard({
   );
 
   const handleSync = useCallback(async (silent = false) => {
-    if (!account?.nim) {
+    const nim = account?.nim;
+    const generation = accountGenerationRef.current;
+    if (!nim || activeNimRef.current !== nim) {
       if (!silent) toast.error("Masuk dengan SIAKAD terlebih dahulu.");
       return;
     }
     if (syncInFlight.current) return;
-    syncInFlight.current = true;
+    const controller = new AbortController();
+    const operation: AccountRequest = { nim, generation, controller };
+    syncInFlight.current = operation;
+    requestControllersRef.current.add(controller);
     setSyncing(true);
+    setSyncPartial(false);
     setSyncError("");
     setSyncErrorCode(undefined);
+    const isCurrent = () => syncInFlight.current === operation
+      && activeNimRef.current === nim
+      && accountGenerationRef.current === generation;
     let failureCode: string | undefined;
     try {
-      const response = await fetch("/api/spada/sync", { method: "POST" });
+      const response = await fetch("/api/spada/sync", { method: "POST", signal: controller.signal });
       const result = (await response.json()) as SyncPayload & { ok: boolean; code?: string; message?: string };
+      if (!isCurrent()) return;
       if (!response.ok || !result.ok) {
         failureCode = result.code;
         throw new Error(result.message ?? "Sinkronisasi gagal.");
@@ -441,28 +507,42 @@ export function TaskDashboard({
         cache: result,
         updatedAt: result.syncedAt,
       }));
+      setSyncPartial(Boolean(result.partial));
       if (!silent) toast.success(`${result.tasks.length} tugas diperbarui dari SPADA`);
-      if (result.partial) toast.warning("Sebagian data belum dapat dimuat. Coba sinkronkan kembali.");
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : "Sinkronisasi SPADA gagal.";
       setSyncError(message);
       setSyncErrorCode(failureCode);
-      toast.error(message);
+      if (!silent) toast.error(message);
     } finally {
-      syncInFlight.current = false;
-      setSyncing(false);
+      requestControllersRef.current.delete(controller);
+      if (syncInFlight.current === operation) {
+        syncInFlight.current = null;
+        setSyncing(false);
+      }
     }
   }, [account?.nim, commitTaskState]);
 
   useEffect(() => {
-    if (stateReady && connected && account?.nim && !autoSyncStarted.current) {
-      autoSyncStarted.current = true;
-      void handleSync(true);
-    }
+    if (!stateReady || !connected || !account?.nim) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void handleSync(true);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [stateReady, connected, account, handleSync]);
 
   function handleLogin(nextUser: DashboardUser) {
-    autoSyncStarted.current = false;
+    invalidateAccountRequests();
+    activeNimRef.current = nextUser.nim;
     setStateReady(false);
     setCloudStatus("loading");
     setAccount(nextUser);
@@ -479,8 +559,8 @@ export function TaskDashboard({
     try {
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("Logout gagal.");
-      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
-      autoSyncStarted.current = false;
+      invalidateAccountRequests();
+      activeNimRef.current = null;
       setStateReady(true);
       setAccount(null);
       setConnected(false);
@@ -509,14 +589,15 @@ export function TaskDashboard({
     });
   }
 
-  function handleSubmitted(taskId: string, submittedAt: string) {
+  function handleSubmitted(taskId: string, submittedAt: string, attachments: { instructorFiles: TaskAttachment[]; submissionFiles: TaskAttachment[] } | undefined, nim: string) {
+    if (activeNimRef.current !== nim) return;
     const updatedAt = new Date().toISOString();
     commitTaskState({
       ...taskStateRef.current,
       statuses: { ...taskStateRef.current.statuses, [taskId]: { status: "submitted", updatedAt } },
       cache: taskStateRef.current.cache ? {
         ...taskStateRef.current.cache,
-        tasks: taskStateRef.current.cache.tasks.map((task) => task.id === taskId ? { ...task, submittedAt } : task),
+        tasks: taskStateRef.current.cache.tasks.map((task) => task.id === taskId ? { ...task, status: "submitted", submittedAt, ...attachments } : task),
       } : undefined,
       updatedAt,
     });
@@ -525,7 +606,7 @@ export function TaskDashboard({
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return tasksWithStatus
-      .filter((task) => statusFilter === "all" || task.status === statusFilter || (statusFilter === "done" && task.status === "submitted"))
+      .filter((task) => statusFilter === "all" || task.status === statusFilter)
       .filter((task) => courseFilter === "all" || task.courseId === courseFilter)
       .filter((task) => {
         const course = courses.find((item) => item.id === task.courseId);
@@ -538,16 +619,30 @@ export function TaskDashboard({
       });
   }, [tasksWithStatus, statusFilter, courseFilter, query, courses]);
 
+  const groupedTasks = useMemo(() => {
+    const groups = new Map<string, { course?: Course; tasks: Task[] }>();
+    for (const task of filteredTasks) {
+      const course = courses.find((item) => item.id === task.courseId);
+      const key = course?.id ?? task.courseId;
+      const group = groups.get(key) ?? { course, tasks: [] };
+      group.tasks.push(task);
+      groups.set(key, group);
+    }
+    return [...groups.values()];
+  }, [filteredTasks, courses]);
+
   const counts = useMemo(() => {
     const total = tasksWithStatus.length;
     const done = tasksWithStatus.filter((task) => task.status === "done" || task.status === "submitted").length;
     const submitted = tasksWithStatus.filter((task) => task.status === "submitted").length;
+    const overduePending = tasksWithStatus.filter((task) => task.status !== "submitted" && getDeadlineState(task.dueAt, task.status).isLate).length;
+    const lateSubmitted = tasksWithStatus.filter((task) => task.status === "submitted" && getDeadlineState(task.dueAt, task.status, task.submittedAt).isLate).length;
     const dueSoon = tasksWithStatus.filter((task) => {
-      if (!task.dueAt || task.status === "submitted" || task.status === "done") return false;
-      const deadline = getDeadlineState(task.dueAt);
+      if (!task.dueAt || task.status === "submitted") return false;
+      const deadline = getDeadlineState(task.dueAt, task.status);
       return deadline.hours >= 0 && deadline.hours <= 72;
     }).length;
-    return { total, done, submitted, dueSoon, progress: total ? Math.round((done / total) * 100) : 0 };
+    return { total, done, submitted, dueSoon, overduePending, lateSubmitted, progress: total ? Math.round((done / total) * 100) : 0 };
   }, [tasksWithStatus]);
 
   const selectedTask = tasksWithStatus.find((task) => task.id === selectedTaskId) ?? null;
@@ -570,28 +665,6 @@ export function TaskDashboard({
               <span className={cn("hidden items-center gap-1.5 text-xs text-muted-ink sm:inline-flex", cloudStatus === "error" && "text-danger")} title={cloudLabel}>
                 <CloudIcon size={15} /> {cloudLabel}
               </span>
-            ) : null}
-            {connected ? (
-              <>
-                <button
-                  type="button"
-                  className="icon-button md:hidden"
-                  aria-label={syncing ? "Menyinkronkan" : "Sinkronkan tugas"}
-                  disabled={syncing}
-                  onClick={() => void handleSync()}
-                >
-                  <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
-                </button>
-                <button
-                  type="button"
-                  className="primary-action hidden min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-60 md:inline-flex"
-                  disabled={syncing}
-                  onClick={() => void handleSync()}
-                >
-                  <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
-                  {syncing ? "Menyinkronkan" : "Sinkronkan"}
-                </button>
-              </>
             ) : null}
             <ThemeToggle />
             {account ? (
@@ -626,11 +699,13 @@ export function TaskDashboard({
             </div>
             <p className="mt-2 text-sm text-secondary-ink">{counts.total} tugas · {courses.length} mata kuliah</p>
           </div>
-          {lastSyncedAt ? (
-            <div className="flex items-center gap-2 text-xs text-muted-ink">
-              <Cloud size={15} /> Sinkron {formatSyncTime(lastSyncedAt)}
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-ink sm:items-end">
+            <div className="flex items-center gap-2" role="status" aria-live="polite">
+              {syncing ? <LoaderCircle size={15} className="animate-spin" /> : <Cloud size={15} />}
+              {syncing ? "Memperbarui otomatis" : lastSyncedAt ? `Diperbarui ${formatSyncTime(lastSyncedAt)}` : "Menunggu pembaruan"}
             </div>
-          ) : null}
+            {syncPartial ? <span>Sebagian data belum dapat dimuat</span> : null}
+          </div>
         </section>
 
         {syncError ? (
@@ -672,21 +747,33 @@ export function TaskDashboard({
               <div className="mt-1 text-xs text-secondary-ink">selesai dan sudah dikumpulkan</div>
             </div>
           </div>
-          <div className="quiet-stat task-enter rounded-[24px] p-5 md:col-span-3 sm:p-6">
-            <div className="text-xs text-muted-ink">Tenggat dekat</div>
-            <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.dueSoon}</div>
-            <div className="mt-2 text-xs text-secondary-ink">dalam 3 hari</div>
-          </div>
-          <div className="quiet-stat task-enter rounded-[24px] p-5 md:col-span-3 sm:p-6">
-            <div className="text-xs text-muted-ink">Dikumpulkan</div>
-            <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.submitted}</div>
-            <div className="mt-2 text-xs text-secondary-ink">terkonfirmasi SPADA</div>
+          <div className="grid grid-cols-2 gap-4 md:col-span-6">
+            <div className="quiet-stat task-enter rounded-[20px] p-5">
+              <div className="text-xs text-muted-ink">Tenggat dekat</div>
+              <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.dueSoon}</div>
+              <div className="mt-2 text-xs text-secondary-ink">dalam 3 hari</div>
+            </div>
+            <div className="quiet-stat task-enter rounded-[20px] p-5">
+              <div className="text-xs text-muted-ink">Belum terkumpul</div>
+              <div className={cn("mt-3 text-3xl font-medium tabular-nums", counts.overduePending ? "text-danger" : "text-ink")}>{counts.overduePending}</div>
+              <div className="mt-2 text-xs text-secondary-ink">sudah lewat tenggat</div>
+            </div>
+            <div className="quiet-stat task-enter rounded-[20px] p-5">
+              <div className="text-xs text-muted-ink">Dikumpulkan</div>
+              <div className="mt-3 text-3xl font-medium tabular-nums text-ink">{counts.submitted}</div>
+              <div className="mt-2 text-xs text-secondary-ink">terkonfirmasi SPADA</div>
+            </div>
+            <div className="quiet-stat task-enter rounded-[20px] p-5">
+              <div className="text-xs text-muted-ink">Terlambat terkumpul</div>
+              <div className="mt-3 text-3xl font-medium tabular-nums text-success">{counts.lateSubmitted}</div>
+              <div className="mt-2 text-xs text-secondary-ink">tetap sudah diterima</div>
+            </div>
           </div>
         </section>
 
         <section className="mt-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="segmented-control grid grid-cols-4 gap-1 rounded-2xl p-1 sm:inline-flex" role="group" aria-label="Filter status tugas">
+            <div className="segmented-control grid grid-cols-5 gap-1 rounded-2xl p-1 sm:inline-flex" role="group" aria-label="Filter status tugas">
               {filterItems.map((item) => (
                 <button
                   key={item.value}
@@ -707,17 +794,34 @@ export function TaskDashboard({
             </select>
           </div>
 
-          <div className="space-y-3">
-            {filteredTasks.map((task, index) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                course={courses.find((course) => course.id === task.courseId)}
-                index={index}
-                onOpen={(item) => setSelectedTaskId(item.id)}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
+          <div className="space-y-8">
+            {groupedTasks.map((group) => {
+              const sectionId = `course-section-${group.course?.id ?? "lain"}`;
+              return (
+                <section key={sectionId} className="space-y-3" aria-labelledby={sectionId}>
+                  <div className="flex items-center gap-3 px-1">
+                    <BookOpen size={17} className="shrink-0 text-muted-ink" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <h2 id={sectionId} className="text-sm font-medium text-ink">{group.course?.name ?? "Mata kuliah lain"}</h2>
+                        {group.course?.code ? <span className="font-mono text-[11px] text-muted-ink">{group.course.code}</span> : null}
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs tabular-nums text-muted-ink" aria-label={`${group.tasks.length} tugas`}>{group.tasks.length}</span>
+                  </div>
+                  {group.tasks.map((task, index) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      course={group.course}
+                      index={index}
+                      onOpen={(item) => setSelectedTaskId(item.id)}
+                      onStatusChange={handleStatusChange}
+                    />
+                  ))}
+                </section>
+              );
+            })}
           </div>
 
           {!filteredTasks.length ? (
@@ -739,9 +843,11 @@ export function TaskDashboard({
         previewCourses={initialCourses}
       />
       <TaskDetailDialog
+        key={selectedTask?.id ?? "no-task"}
         task={selectedTask}
         course={selectedCourse}
         connected={connected}
+        accountNim={account?.nim}
         onClose={() => setSelectedTaskId(null)}
         onStatusChange={handleStatusChange}
         onSubmitted={handleSubmitted}

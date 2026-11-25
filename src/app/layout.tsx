@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Manrope } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
+import { ParticleWaveBackground } from "@/components/particle-wave-background";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -46,10 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          <div className="aurora" aria-hidden="true">
-            <div className="aurora-ribbon aurora-ribbon-a" />
-            <div className="aurora-ribbon aurora-ribbon-b" />
-          </div>
+          <ParticleWaveBackground />
           <div className="relative z-10">
             {children}
           </div>

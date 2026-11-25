@@ -9,6 +9,12 @@ export interface Course {
   lecturer?: string;
 }
 
+export interface TaskAttachment {
+  name: string;
+  url: string;
+  size?: string;
+}
+
 export interface Task {
   id: string;
   courseId: string;
@@ -20,6 +26,8 @@ export interface Task {
   description?: string;
   submittedAt?: string;
   submittable?: boolean;
+  instructorFiles?: TaskAttachment[];
+  submissionFiles?: TaskAttachment[];
 }
 
 export interface SpadaConnection {
