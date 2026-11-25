@@ -83,17 +83,15 @@ const previewDeadlineLine = {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-          <path d="M8 8.5h6M8 12h6M8 15.5h3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="m15.5 16 1.6 1.6 3.2-3.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      <span className="text-[15px] font-medium leading-5 text-ink">
-        <span className="sm:hidden">Paanz</span>
-        <span className="hidden sm:inline">Paanz Task List</span>
+    <div className="flex min-w-0 items-center gap-2.5" role="img" aria-label="Paanz Task List">
+      <svg className="size-8 shrink-0 text-accent" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M7 4.5h13.5A4.5 4.5 0 0 1 25 9v18.5H11.5A4.5 4.5 0 0 1 7 23V4.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M18.5 4.5V9H25" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M11 13.5h8M11 18h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="m16.5 22 2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="truncate text-[17px] font-medium leading-6 text-ink">
+        Paanz<span className="hidden text-secondary-ink sm:inline"> Task List</span>
       </span>
     </div>
   );
@@ -664,7 +662,7 @@ export function TaskDashboard({
           <Brand />
           <label className="relative ml-auto hidden w-full max-w-sm md:block">
             <span className="sr-only">Cari tugas</span>
-            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-ink" />
+            <Search size={18} strokeWidth={2} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink" />
             <input className="control w-full pl-11 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <div className="ml-auto flex items-center gap-2 md:ml-0">
@@ -691,7 +689,7 @@ export function TaskDashboard({
         <div className="border-t border-line px-4 py-3 md:hidden">
           <label className="relative block">
             <span className="sr-only">Cari tugas</span>
-            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-ink" />
+            <Search size={18} strokeWidth={2} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink" />
             <input className="control w-full pl-11 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </div>

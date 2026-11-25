@@ -1,8 +1,9 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowUpRight, CalendarDays, CheckCircle2, Download, FileText, LoaderCircle, Send, UploadCloud, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { ArrowUpRight, CalendarDays, CheckCircle2, Download, Eye, FileText, LoaderCircle, Send, UploadCloud, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Course, Task, TaskAttachment, TaskStatus } from "@/lib/types";
 import { cn, formatDeadline, getDeadlineState, statusLabels } from "@/lib/utils";
@@ -17,42 +18,177 @@ interface TaskDetailDialogProps {
   onSubmitted: (taskId: string, submittedAt: string, attachments: { instructorFiles: TaskAttachment[]; submissionFiles: TaskAttachment[] } | undefined, nim: string) => void;
 }
 
+async function fetchAttachmentBlob(taskUrl: string, attachment: TaskAttachment, signal?: AbortSignal) {
+  const params = new URLSearchParams({ taskUrl, fileUrl: attachment.url });
+  const response = await fetch(`/api/spada/file?${params}`, { signal });
+  if (!response.ok) {
+    const result = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(result?.message ?? "Berkas gagal dibuka.");
+  }
+  return response.blob();
+}
+
+function clickDownload(url: string, name: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
 function AttachmentList({
   files,
   taskUrl,
   emptyText,
   downloadingUrl,
   onDownload,
+  onPreview,
 }: {
   files: TaskAttachment[];
   taskUrl?: string;
   emptyText: string;
   downloadingUrl: string | null;
   onDownload: (file: TaskAttachment) => void;
+  onPreview: (file: TaskAttachment) => void;
 }) {
   if (!files.length) return <p className="rounded-xl bg-surface-subtle px-4 py-3 text-xs leading-5 text-muted-ink">{emptyText}</p>;
 
   return (
     <ul className="space-y-2">
       {files.map((file) => (
-        <li key={file.url}>
-          <button
-            type="button"
-            className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-line bg-surface-subtle px-3 py-2 text-left transition-colors hover:bg-surface-raised disabled:opacity-60"
-            disabled={!taskUrl || downloadingUrl === file.url}
-            onClick={() => onDownload(file)}
-            aria-label={`Unduh ${file.name}`}
-          >
-            <FileText size={18} className="shrink-0 text-secondary-ink" aria-hidden="true" />
+        <li key={file.url} className="rounded-2xl border border-line bg-surface-subtle p-3 sm:flex sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-secondary-ink">
+              <FileText size={18} aria-hidden="true" />
+            </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-ink">{file.name}</span>
               {file.size ? <span className="mt-0.5 block font-mono text-[11px] tabular-nums text-muted-ink">{file.size}</span> : null}
             </span>
-            {downloadingUrl === file.url ? <LoaderCircle size={17} className="shrink-0 animate-spin text-muted-ink" /> : <Download size={17} className="shrink-0 text-muted-ink" />}
-          </button>
+          </div>
+          <div className="mt-3 flex items-center gap-2 sm:mt-0">
+            <button
+              type="button"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-xs font-medium text-secondary-ink transition-colors hover:bg-surface-raised hover:text-accent disabled:opacity-60 sm:flex-none"
+              disabled={!taskUrl}
+              onClick={() => onPreview(file)}
+              aria-label={`Pratinjau ${file.name}`}
+            >
+              <Eye size={17} aria-hidden="true" /> Preview
+            </button>
+            <button
+              type="button"
+              className="icon-button border border-line bg-surface-raised"
+              disabled={!taskUrl || downloadingUrl === file.url}
+              onClick={() => onDownload(file)}
+              aria-label={`Unduh ${file.name}`}
+            >
+              {downloadingUrl === file.url ? <LoaderCircle size={17} className="animate-spin" /> : <Download size={17} />}
+            </button>
+          </div>
         </li>
       ))}
     </ul>
+  );
+}
+
+type PreviewKind = "pdf" | "image" | "text" | "other";
+
+function FilePreviewDialog({ attachment, taskUrl, onClose }: { attachment: TaskAttachment; taskUrl: string; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{ url: string; kind: PreviewKind; text: string } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl = "";
+
+    async function loadPreview() {
+      try {
+        const blob = await fetchAttachmentBlob(taskUrl, attachment, controller.signal);
+        if (controller.signal.aborted) return;
+        const mime = blob.type.split(";")[0].toLowerCase();
+        let kind: PreviewKind = "other";
+        let text = "";
+        if (mime === "application/pdf" && /\.pdf$/i.test(attachment.name)) {
+          kind = "pdf";
+        } else if (/^image\/(?:png|jpeg|gif|webp|avif|bmp)$/.test(mime) && /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i.test(attachment.name)) {
+          kind = "image";
+        } else if ((mime.startsWith("text/") || ["application/json", "application/xml"].includes(mime))
+          && /\.(?:txt|md|csv|json|log|xml|ya?ml)$/i.test(attachment.name)
+          && blob.size <= 1024 * 1024) {
+          kind = "text";
+          text = await blob.slice(0, 200_000).text();
+          if (blob.size > 200_000) text += "\n\nPratinjau dibatasi pada 200 KB pertama.";
+        }
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreview({ url: objectUrl, kind, text });
+        setLoading(false);
+      } catch (previewError) {
+        if (controller.signal.aborted) return;
+        setError(previewError instanceof Error ? previewError.message : "Pratinjau berkas gagal dibuka.");
+        setLoading(false);
+      }
+    }
+
+    void loadPreview();
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [attachment, taskUrl]);
+
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm" />
+        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-[60] flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] p-0">
+          <div className="flex items-start gap-4 border-b border-line p-4 pr-16 sm:p-5 sm:pr-16">
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="break-words text-base font-medium leading-6 text-ink sm:text-lg">{attachment.name}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-xs leading-5 text-secondary-ink">Pratinjau berkas tanpa menyimpannya ke perangkat</Dialog.Description>
+            </div>
+          </div>
+          <Dialog.Close className="icon-button absolute right-3 top-3 z-10 bg-surface-raised" aria-label="Tutup pratinjau">
+            <X size={18} />
+          </Dialog.Close>
+
+          <div className="min-h-0 flex-1 bg-surface-subtle">
+            {loading ? (
+              <div className="flex size-full min-h-48 items-center justify-center gap-3 text-sm text-secondary-ink" role="status">
+                <LoaderCircle size={18} className="animate-spin" /> Membuka pratinjau
+              </div>
+            ) : error ? (
+              <div className="flex size-full min-h-48 items-center justify-center p-6 text-center text-sm leading-6 text-danger" role="alert">{error}</div>
+            ) : preview?.kind === "pdf" ? (
+              <iframe src={preview.url} title={`Pratinjau ${attachment.name}`} className="size-full min-h-0 bg-white" />
+            ) : preview?.kind === "image" ? (
+              <div className="relative flex size-full items-center justify-center overflow-auto p-4">
+                <Image src={preview.url} alt={`Pratinjau ${attachment.name}`} fill unoptimized sizes="(max-width: 768px) 100vw, 1024px" className="object-contain" />
+              </div>
+            ) : preview?.kind === "text" ? (
+              <pre className="scrollbar-quiet size-full overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-ink sm:p-6 sm:text-sm">{preview.text}</pre>
+            ) : (
+              <div className="flex size-full min-h-48 flex-col items-center justify-center p-6 text-center">
+                <FileText size={28} className="mb-3 text-secondary-ink" aria-hidden="true" />
+                <p className="text-sm font-medium text-ink">Pratinjau langsung belum tersedia untuk format ini</p>
+                <p className="mt-2 text-xs leading-5 text-secondary-ink">Berkas tetap dapat diunduh dengan tombol di bawah</p>
+              </div>
+            )}
+          </div>
+
+          {preview ? (
+            <div className="border-t border-line p-3 sm:p-4">
+              <button type="button" className="primary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent sm:w-auto" onClick={() => clickDownload(preview.url, attachment.name)}>
+                <Download size={17} /> Unduh berkas
+              </button>
+            </div>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -69,6 +205,7 @@ export function TaskDetailDialog({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<TaskAttachment | null>(null);
   const canSubmit = Boolean(connected && task?.sourceUrl && task.submittable !== false && (file || text.trim()) && task.status !== "submitted");
   const fileLabel = useMemo(() => (file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "Pilih berkas tugas"), [file]);
   const deadline = getDeadlineState(task?.dueAt, task?.status, task?.submittedAt);
@@ -77,26 +214,20 @@ export function TaskDetailDialog({
     if (!task?.sourceUrl) return;
     setDownloadingUrl(attachment.url);
     try {
-      const params = new URLSearchParams({ taskUrl: task.sourceUrl, fileUrl: attachment.url });
-      const response = await fetch(`/api/spada/file?${params}`);
-      if (!response.ok) {
-        const result = await response.json().catch(() => null) as { message?: string } | null;
-        throw new Error(result?.message ?? "Berkas gagal diunduh.");
-      }
-      const blob = await response.blob();
+      const blob = await fetchAttachmentBlob(task.sourceUrl, attachment);
       const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = attachment.name;
-      document.body.append(link);
-      link.click();
-      link.remove();
+      clickDownload(objectUrl, attachment.name);
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Berkas gagal diunduh.");
     } finally {
       setDownloadingUrl(null);
     }
+  }
+
+  function closeDetail() {
+    setPreviewAttachment(null);
+    onClose();
   }
 
   async function handleSubmit() {
@@ -138,7 +269,8 @@ export function TaskDetailDialog({
   }
 
   return (
-    <Dialog.Root open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
+    <>
+    <Dialog.Root open={Boolean(task)} onOpenChange={(open) => !open && closeDetail()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/25 backdrop-blur-sm" />
         <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] p-0">
@@ -221,6 +353,7 @@ export function TaskDetailDialog({
                   emptyText="Tidak ada berkas pendamping pada tugas ini"
                   downloadingUrl={downloadingUrl}
                   onDownload={(attachment) => void handleDownload(attachment)}
+                  onPreview={setPreviewAttachment}
                 />
               </section>
 
@@ -236,6 +369,7 @@ export function TaskDetailDialog({
                     emptyText="Tidak ada berkas unggahan yang terdeteksi. Jawaban teks tetap tercatat di SPADA"
                     downloadingUrl={downloadingUrl}
                     onDownload={(attachment) => void handleDownload(attachment)}
+                    onPreview={setPreviewAttachment}
                   />
                 </section>
               ) : null}
@@ -320,5 +454,14 @@ export function TaskDetailDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+    {previewAttachment && task?.sourceUrl ? (
+      <FilePreviewDialog
+        key={previewAttachment.url}
+        attachment={previewAttachment}
+        taskUrl={task.sourceUrl}
+        onClose={() => setPreviewAttachment(null)}
+      />
+    ) : null}
+    </>
   );
 }

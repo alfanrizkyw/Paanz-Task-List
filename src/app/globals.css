@@ -80,7 +80,7 @@
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
-  --font-sans: var(--font-manrope);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-plex-mono);
 }
 

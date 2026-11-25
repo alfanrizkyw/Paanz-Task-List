@@ -56,7 +56,9 @@ assert.equal(courseLinks[0].text, "");
 const submittedAnswer = encodeURIComponent(JSON.stringify([{
   status: "Submitted for grading",
   timemodified: "Monday, 2 November 2026, 10:00 AM",
+  txt: encodeURIComponent('<a href="/pluginfile.php/1/assign/submission_files/Jawaban-Tugas-Kedua.pdf">Jawaban Tugas Kedua.pdf <span>1,2 MB</span></a>'),
 }]));
+const firstTaskHtml = encodeURIComponent('<p>Baca modul sebelum mengerjakan.</p><a href="/pluginfile.php/1/assign/intro/Modul-Tugas-Pertama.pdf">Modul Tugas Pertama.pdf <span>240 KB</span></a>');
 const tree = parseSpadaTree([{
   key: 13310,
   title: '<span title="Pemrograman Web : Diploma IV Sistem Informasi Bisnis"><strong>Pemrograman Web : Diploma IV Sistem Informasi Bisnis</strong></span>',
@@ -68,7 +70,7 @@ const tree = parseSpadaTree([{
     children: [
       {
         key: "1",
-        title: '<span idmodule="1001" jenis="submit" allowsubmissionsfromdate="Senin, 2 November 2026 Jam 08:00:00" duedate="Selasa, 3 November 2026 Jam 23:59:00" txt="" jawaban="%5B%5D" title="Tugas pertama">Tugas pertama</span>',
+        title: `<span idmodule="1001" jenis="submit" allowsubmissionsfromdate="Senin, 2 November 2026 Jam 08:00:00" duedate="Selasa, 3 November 2026 Jam 23:59:00" txt="${firstTaskHtml}" jawaban="%5B%5D" title="Tugas pertama">Tugas pertama</span>`,
       },
       {
         key: "2",
@@ -84,8 +86,13 @@ assert.equal(tree.tasks[0].status, "todo");
 assert.equal(tree.tasks[0].title, "Tugas pertama — Pertemuan ke 1");
 assert.equal(tree.tasks[0].dueAt, "2026-11-03T16:59:00.000Z");
 assert.equal(tree.tasks[0].sourceUrl, "https://lmsslc.polinema.ac.id/mod/assign/view.php?id=1001");
+assert.equal(tree.tasks[0].instructorFiles[0]?.name, "Modul Tugas Pertama.pdf");
+assert.equal(tree.tasks[0].instructorFiles[0]?.size, "240 KB");
+assert.match(tree.tasks[0].description, /Baca modul sebelum mengerjakan/);
+assert.doesNotMatch(tree.tasks[0].description, /<a\b/i);
 assert.equal(tree.tasks[1].status, "submitted");
 assert.equal(tree.tasks[1].submittedAt, "2026-11-02T03:00:00.000Z");
+assert.equal(tree.tasks[1].submissionFiles[0]?.name, "Jawaban Tugas Kedua.pdf");
 
 const moodleHtml = `
   <h1>Nama mata kuliah</h1>

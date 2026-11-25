@@ -64,9 +64,12 @@ function syntheticTree(includeDuplicateCourse = false) {
       folder: 1,
       children: Array.from({ length: taskCounts[courseIndex] }, (_, taskIndex) => {
         const moduleId = 10000 + courseIndex * 100 + taskIndex;
+        const taskHtml = courseIndex === 0 && taskIndex === 1
+          ? encodeURIComponent(`<p>Modul tambahan dari SPADA.</p><a href="/pluginfile.php/1/assign/intro/Modul-Tree-${moduleId}.pdf">Modul Tree ${moduleId}.pdf <span>180 KB</span></a>`)
+          : "";
         return {
           key: moduleId,
-          title: `<span idmodule="${moduleId}" jenis="submit" allowsubmissionsfromdate="Senin, 2 November 2026 Jam 08:00:00" duedate="Kamis, 24 September 2026 Jam 16:00:00" txt="" jawaban="%5B%5D" title="Tugas ${taskIndex + 1}">Tugas ${taskIndex + 1}</span>`,
+          title: `<span idmodule="${moduleId}" jenis="submit" allowsubmissionsfromdate="Senin, 2 November 2026 Jam 08:00:00" duedate="Kamis, 24 September 2026 Jam 16:00:00" txt="${taskHtml}" jawaban="%5B%5D" title="Tugas ${taskIndex + 1}">Tugas ${taskIndex + 1}</span>`,
         };
       }),
     }],
@@ -180,11 +183,25 @@ try {
   assert.equal(result.tasks[0].instructorFiles[0].name, "Modul-10000.pdf");
   assert.equal(result.tasks[0].submissionFiles[0].name, "Jawaban-Alya.pdf");
   assert.equal(result.tasks[1].status, "todo");
+  if (!useLiveFixtures) {
+    assert.deepEqual(result.tasks[1].instructorFiles.map((item) => item.name), ["Modul-10001.pdf", "Modul Tree 10001.pdf"]);
+  }
 
   const fileResponse = await downloadSpadaTaskFile(result.tasks[0].sourceUrl, result.tasks[0].submissionFiles[0].url);
   assert.equal(fileResponse.status, 200);
   assert.match(fileResponse.headers.get("content-disposition"), /attachment/);
   assert.equal(await fileResponse.text(), "isi-berkas-uji");
+  if (!useLiveFixtures) {
+    const treeFile = result.tasks[1].instructorFiles.find((item) => item.name === "Modul Tree 10001.pdf");
+    assert.ok(treeFile);
+    const treeFileResponse = await downloadSpadaTaskFile(result.tasks[1].sourceUrl, treeFile.url);
+    assert.equal(treeFileResponse.status, 200);
+    assert.equal(await treeFileResponse.text(), "isi-berkas-uji");
+    await assert.rejects(
+      downloadSpadaTaskFile(result.tasks[0].sourceUrl, treeFile.url),
+      (error) => error instanceof SpadaError && error.code === "FILE_NOT_FOUND",
+    );
+  }
   await assert.rejects(
     downloadSpadaTaskFile(result.tasks[0].sourceUrl, "https://lmsslc.polinema.ac.id/pluginfile.php/1/assign/submission_files/tidak-ada.pdf"),
     (error) => error instanceof SpadaError && error.code === "FILE_NOT_FOUND",

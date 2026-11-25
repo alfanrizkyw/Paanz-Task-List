@@ -278,7 +278,7 @@ function parseTaskAttachments(html: string, pageUrl: string) {
   const submissionFiles: TaskAttachment[] = [];
   for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
     const href = absoluteUrl(attribute(match[1], "href"), pageUrl);
-    if (!href || !isCampusUrl(href) || !/\/pluginfile\.php\/\d+\/assign\/(?:intro|submission_files)\//i.test(href)) continue;
+    if (!href || !isMoodleUrl(href) || !/\/pluginfile\.php\/\d+\/assign\/(?:intro|submission_files)\//i.test(href)) continue;
     const text = stripHtml(match[2]);
     const attachment: TaskAttachment = {
       name: attachmentName(href, text).slice(0, 240),
@@ -289,6 +289,14 @@ function parseTaskAttachments(html: string, pageUrl: string) {
     if (!destination.some((item) => item.url === href)) destination.push(attachment);
   }
   return { instructorFiles: instructorFiles.slice(0, 30), submissionFiles: submissionFiles.slice(0, 30) };
+}
+
+function mergeAttachments(primary: TaskAttachment[], fallback: TaskAttachment[] = []) {
+  const attachments = new Map(primary.map((item) => [item.url, item]));
+  for (const item of fallback) {
+    if (!attachments.has(item.url)) attachments.set(item.url, item);
+  }
+  return [...attachments.values()].slice(0, 30);
 }
 
 interface SpadaTreeAnswer {
@@ -357,7 +365,11 @@ function parseSpadaTree(nodes: SpadaTreeNode[]) {
       const answers = treeAnswers(attribute(node.title, "jawaban"));
       const latest = answers[answers.length - 1];
       const sourceUrl = `${MOODLE_URL}/mod/assign/view.php?id=${moduleId}`;
-      const description = stripHtml(decodeUriValue(attribute(node.title, "txt")));
+      const taskHtml = decodeEntities(decodeUriValue(attribute(node.title, "txt")));
+      const answerHtml = decodeEntities(decodeUriValue(latest?.txt ?? ""));
+      const taskAttachments = parseTaskAttachments(taskHtml, sourceUrl);
+      const answerAttachments = parseTaskAttachments(answerHtml, sourceUrl);
+      const description = stripHtml(taskHtml);
       tasks.push({
         id: sourceUrl,
         courseId: course.id,
@@ -369,6 +381,8 @@ function parseSpadaTree(nodes: SpadaTreeNode[]) {
         description: [meeting ? `Konteks: ${meeting}` : "", description].filter(Boolean).join("\n").slice(0, 800),
         submittedAt: latest?.timemodified ? parseMoodleDate(latest.timemodified) : undefined,
         submittable: true,
+        instructorFiles: mergeAttachments(taskAttachments.instructorFiles, answerAttachments.instructorFiles),
+        submissionFiles: mergeAttachments(answerAttachments.submissionFiles, taskAttachments.submissionFiles),
       });
     }
   }
@@ -443,6 +457,16 @@ async function mapLimit<T, R>(items: T[], limit: number, mapper: (item: T) => Pr
   return results;
 }
 
+async function readSpadaTree(session: SpadaSession) {
+  const treePage = await campusPage(new URL("?get_tree_ugas=1", BASE_URL).toString(), session);
+  if (isSpadaLogin(treePage.html)) {
+    throw new SpadaError("Sesi SPADA sudah berakhir. Masuk kembali dengan SIAKAD.", "SESSION_EXPIRED");
+  }
+  const parsed: unknown = JSON.parse(treePage.html);
+  if (!Array.isArray(parsed)) throw new SpadaError("Struktur daftar tugas SPADA belum dikenali.", "STRUCTURE_UNKNOWN");
+  return parseSpadaTree(parsed as SpadaTreeNode[]);
+}
+
 export async function syncSpadaTasks(): Promise<SyncPayload> {
   const session = await readSpadaSession();
   if (!session) throw new SpadaError("Masuk dengan akun SIAKAD terlebih dahulu.", "AUTH_REQUIRED");
@@ -503,13 +527,7 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
 
   let tree: ReturnType<typeof parseSpadaTree> = { courses: [], tasks: [] };
   try {
-    const treePage = await campusPage(new URL("?get_tree_ugas=1", BASE_URL).toString(), session);
-    if (isSpadaLogin(treePage.html)) {
-      throw new SpadaError("Sesi SPADA sudah berakhir. Masuk kembali dengan SIAKAD.", "SESSION_EXPIRED");
-    }
-    const parsed: unknown = JSON.parse(treePage.html);
-    if (Array.isArray(parsed)) tree = parseSpadaTree(parsed as SpadaTreeNode[]);
-    else incomplete = true;
+    tree = await readSpadaTree(session);
   } catch (error) {
     if (error instanceof SpadaError && error.code === "SESSION_EXPIRED") throw error;
     incomplete = true;
@@ -568,8 +586,8 @@ export async function syncSpadaTasks(): Promise<SyncPayload> {
       description: detail.description || existing?.description,
       submittedAt: detail.submittedAt ?? existing?.submittedAt,
       submittable: detail.submittable,
-      instructorFiles: detail.instructorFiles,
-      submissionFiles: detail.submissionFiles,
+      instructorFiles: mergeAttachments(detail.instructorFiles, existing?.instructorFiles),
+      submissionFiles: mergeAttachments(detail.submissionFiles, existing?.submissionFiles),
     });
   }
 
@@ -606,7 +624,12 @@ export async function downloadSpadaTaskFile(taskUrlValue: string, fileUrlValue: 
   }
 
   const detail = await readTaskDetails(taskUrl, session);
-  const attachment = [...detail.instructorFiles, ...detail.submissionFiles].find((item) => item.url === fileUrl);
+  let attachment = [...detail.instructorFiles, ...detail.submissionFiles].find((item) => item.url === fileUrl);
+  if (!attachment) {
+    const tree = await readSpadaTree(session);
+    const treeTask = tree.tasks.find((item) => item.sourceUrl === taskUrl);
+    attachment = [...(treeTask?.instructorFiles ?? []), ...(treeTask?.submissionFiles ?? [])].find((item) => item.url === fileUrl);
+  }
   if (!attachment) throw new SpadaError("Berkas tidak ditemukan pada tugas ini.", "FILE_NOT_FOUND");
 
   let currentUrl = fileUrl;
