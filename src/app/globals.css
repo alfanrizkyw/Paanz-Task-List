@@ -157,7 +157,6 @@ button:disabled {
 
 .glass,
 .glass-soft {
-  position: relative;
   isolation: isolate;
   background-color: var(--surface);
   background-image: linear-gradient(135deg, var(--glass-sheen), transparent 32%, rgba(255, 255, 255, 0.025));

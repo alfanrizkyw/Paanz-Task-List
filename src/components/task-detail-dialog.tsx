@@ -141,10 +141,14 @@ export function TaskDetailDialog({
     <Dialog.Root open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/25 backdrop-blur-sm" />
-        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-32px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[24px] p-5 sm:p-7">
-          {task ? (
-            <>
-              <div className="flex items-start justify-between gap-4">
+        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] p-0">
+          <div className="scrollbar-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pr-16 sm:p-7 sm:pr-16">
+            {task ? (
+              <>
+                <Dialog.Close className="icon-button absolute right-3 top-3 z-10 bg-surface-raised" aria-label="Tutup detail tugas">
+                  <X size={18} />
+                </Dialog.Close>
+                <div className="pr-2">
                 <div className="min-w-0">
                   <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-secondary-ink">
                     <span className="font-mono font-medium text-accent">{course?.code ?? "SPADA"}</span>
@@ -155,9 +159,6 @@ export function TaskDetailDialog({
                     {course?.name ?? "Mata kuliah"} · {statusLabels[task.status]}
                   </Dialog.Description>
                 </div>
-                <Dialog.Close className="icon-button -mr-2 -mt-2 shrink-0" aria-label="Tutup detail tugas">
-                  <X size={18} />
-                </Dialog.Close>
               </div>
 
               {task.status === "submitted" ? (
@@ -313,8 +314,9 @@ export function TaskDetailDialog({
                   )}
                 </section>
               )}
-            </>
-          ) : null}
+              </>
+            ) : null}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

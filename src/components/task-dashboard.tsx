@@ -552,6 +552,9 @@ export function TaskDashboard({
     setSyncError("");
     setSyncErrorCode(undefined);
     setSelectedTaskId(null);
+    setStatusFilter("all");
+    setCourseFilter("all");
+    setQuery("");
     toast.success("Akun SIAKAD terhubung");
   }
 
@@ -603,11 +606,27 @@ export function TaskDashboard({
     });
   }
 
+  const courseOptions = useMemo(() => {
+    const options = new Map<string, { id: string; course?: Course; total: number; done: number }>();
+    for (const course of courses) options.set(course.id, { id: course.id, course, total: 0, done: 0 });
+    for (const task of tasksWithStatus) {
+      const course = courses.find((item) => item.id === task.courseId);
+      const option = options.get(task.courseId) ?? { id: task.courseId, course, total: 0, done: 0 };
+      option.total += 1;
+      if (task.status === "done" || task.status === "submitted") option.done += 1;
+      options.set(task.courseId, option);
+    }
+    return [...options.values()];
+  }, [courses, tasksWithStatus]);
+
+  const activeCourseOption = courseOptions.find((option) => option.id === courseFilter);
+  const effectiveCourseFilter = courseFilter === "all" || activeCourseOption ? courseFilter : "all";
+
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return tasksWithStatus
       .filter((task) => statusFilter === "all" || task.status === statusFilter)
-      .filter((task) => courseFilter === "all" || task.courseId === courseFilter)
+      .filter((task) => effectiveCourseFilter === "all" || task.courseId === effectiveCourseFilter)
       .filter((task) => {
         const course = courses.find((item) => item.id === task.courseId);
         return !normalizedQuery || `${task.title} ${course?.name ?? ""} ${course?.code ?? ""}`.toLowerCase().includes(normalizedQuery);
@@ -617,19 +636,7 @@ export function TaskDashboard({
         const bTime = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
         return aTime - bTime;
       });
-  }, [tasksWithStatus, statusFilter, courseFilter, query, courses]);
-
-  const groupedTasks = useMemo(() => {
-    const groups = new Map<string, { course?: Course; tasks: Task[] }>();
-    for (const task of filteredTasks) {
-      const course = courses.find((item) => item.id === task.courseId);
-      const key = course?.id ?? task.courseId;
-      const group = groups.get(key) ?? { course, tasks: [] };
-      group.tasks.push(task);
-      groups.set(key, group);
-    }
-    return [...groups.values()];
-  }, [filteredTasks, courses]);
+  }, [tasksWithStatus, statusFilter, effectiveCourseFilter, query, courses]);
 
   const counts = useMemo(() => {
     const total = tasksWithStatus.length;
@@ -657,8 +664,8 @@ export function TaskDashboard({
           <Brand />
           <label className="relative ml-auto hidden w-full max-w-sm md:block">
             <span className="sr-only">Cari tugas</span>
-            <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-ink" />
-            <input className="control w-full pl-10 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-ink" />
+            <input className="control w-full pl-11 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             {account ? (
@@ -684,8 +691,8 @@ export function TaskDashboard({
         <div className="border-t border-line px-4 py-3 md:hidden">
           <label className="relative block">
             <span className="sr-only">Cari tugas</span>
-            <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-ink" />
-            <input className="control w-full pl-10 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-ink" />
+            <input className="control w-full pl-11 pr-4 text-sm" placeholder="Cari tugas" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </div>
       </header>
@@ -733,18 +740,18 @@ export function TaskDashboard({
         ) : null}
 
         <section className="mt-6 grid gap-4 md:grid-cols-12" aria-label="Ringkasan tugas">
-          <div className="glass task-enter flex items-center gap-5 rounded-[24px] p-5 md:col-span-6 sm:p-6">
-            <div className="relative size-16 shrink-0">
-              <svg viewBox="0 0 48 48" className="size-16 -rotate-90" aria-hidden="true">
+          <div className="glass task-enter flex items-center gap-5 rounded-[24px] p-5 md:col-span-6 sm:gap-6 sm:p-6">
+            <div className="relative size-20 shrink-0 sm:size-24" role="progressbar" aria-label="Progres tugas" aria-valuemin={0} aria-valuemax={100} aria-valuenow={counts.progress} aria-valuetext={`${counts.progress} persen selesai`}>
+              <svg viewBox="0 0 48 48" className="size-full -rotate-90" aria-hidden="true">
                 <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border)" strokeWidth="3" />
-                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${counts.progress} ${100 - counts.progress}`} />
+                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--accent)" strokeWidth="3.5" strokeLinecap="round" pathLength="100" strokeDasharray={`${counts.progress} ${100 - counts.progress}`} />
               </svg>
-              <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-medium tabular-nums text-ink">{counts.progress}%</span>
+              <span className="absolute inset-0 flex items-center justify-center font-mono text-xl font-medium tabular-nums text-ink sm:text-2xl">{counts.progress}%</span>
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs text-muted-ink">Progres tugas</div>
-              <div className="mt-1 text-3xl font-medium tabular-nums text-ink">{counts.done}<span className="text-lg font-normal text-muted-ink"> / {counts.total}</span></div>
-              <div className="mt-1 text-xs text-secondary-ink">selesai dan sudah dikumpulkan</div>
+              <div className="mt-1 text-4xl font-medium tabular-nums text-ink">{counts.done}<span className="text-xl font-normal text-muted-ink"> / {counts.total}</span></div>
+              <div className="mt-1 text-xs leading-5 text-secondary-ink">selesai dan sudah dikumpulkan</div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 md:col-span-6">
@@ -771,7 +778,7 @@ export function TaskDashboard({
           </div>
         </section>
 
-        <section className="mt-8">
+        <section className="mt-8" aria-labelledby="task-list-title">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="segmented-control grid grid-cols-5 gap-1 rounded-2xl p-1 sm:inline-flex" role="group" aria-label="Filter status tugas">
               {filterItems.map((item) => (
@@ -787,51 +794,88 @@ export function TaskDashboard({
                 </button>
               ))}
             </div>
-            <label className="sr-only" htmlFor="course-filter">Filter mata kuliah</label>
-            <select id="course-filter" className="control min-w-0 max-w-full px-3 text-xs sm:max-w-64" value={courseFilter} onChange={(event) => setCourseFilter(event.target.value)}>
-              <option value="all">Semua mata kuliah</option>
-              {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
-            </select>
           </div>
 
-          <div className="space-y-8">
-            {groupedTasks.map((group) => {
-              const sectionId = `course-section-${group.course?.id ?? "lain"}`;
-              return (
-                <section key={sectionId} className="space-y-3" aria-labelledby={sectionId}>
-                  <div className="flex items-center gap-3 px-1">
-                    <BookOpen size={17} className="shrink-0 text-muted-ink" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <h2 id={sectionId} className="text-sm font-medium text-ink">{group.course?.name ?? "Mata kuliah lain"}</h2>
-                        {group.course?.code ? <span className="font-mono text-[11px] text-muted-ink">{group.course.code}</span> : null}
-                      </div>
-                    </div>
-                    <span className="font-mono text-xs tabular-nums text-muted-ink" aria-label={`${group.tasks.length} tugas`}>{group.tasks.length}</span>
-                  </div>
-                  {group.tasks.map((task, index) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      course={group.course}
-                      index={index}
-                      onOpen={(item) => setSelectedTaskId(item.id)}
-                      onStatusChange={handleStatusChange}
-                    />
-                  ))}
-                </section>
-              );
-            })}
-          </div>
+          <div className="grid items-start gap-5 lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-6">
+            <aside className="glass-soft scrollbar-quiet min-w-0 rounded-[20px] p-3 lg:sticky lg:top-[88px] lg:max-h-[calc(100dvh-112px)] lg:overflow-y-auto" aria-label="Daftar mata kuliah">
+              <div className="hidden items-center justify-between px-2 pb-3 lg:flex">
+                <h2 className="text-xs font-medium text-ink">Mata kuliah</h2>
+                <span className="font-mono text-[11px] tabular-nums text-muted-ink">{courseOptions.length}</span>
+              </div>
+              <div className="scrollbar-quiet -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0">
+                <button
+                  type="button"
+                  aria-pressed={effectiveCourseFilter === "all"}
+                  onClick={() => setCourseFilter("all")}
+                  className={cn(
+                    "inline-flex min-h-12 max-w-[220px] shrink-0 items-center gap-3 rounded-xl border px-3 text-left transition-colors lg:w-full lg:max-w-none",
+                    effectiveCourseFilter === "all" ? "border-accent/20 bg-accent-soft text-accent" : "border-transparent text-secondary-ink hover:bg-surface-raised hover:text-ink",
+                  )}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-subtle"><LayoutList size={16} aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium leading-4">Semua mata kuliah</span>
+                    <span className="mt-1 block font-mono text-[10px] tabular-nums text-muted-ink">{tasksWithStatus.length} tugas</span>
+                  </span>
+                </button>
+                {courseOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={effectiveCourseFilter === option.id}
+                    title={option.course?.name ?? "Mata kuliah lain"}
+                    onClick={() => setCourseFilter(option.id)}
+                    className={cn(
+                      "inline-flex min-h-12 max-w-[220px] shrink-0 items-center gap-3 rounded-xl border px-3 text-left transition-colors lg:w-full lg:max-w-none",
+                      effectiveCourseFilter === option.id ? "border-accent/20 bg-accent-soft text-accent" : "border-transparent text-secondary-ink hover:bg-surface-raised hover:text-ink",
+                    )}
+                  >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-subtle"><BookOpen size={16} aria-hidden="true" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium leading-4">{option.course?.name ?? "Mata kuliah lain"}</span>
+                      <span className="mt-1 block font-mono text-[10px] tabular-nums text-muted-ink">{option.course?.code ?? "SPADA"} · {option.total} tugas</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </aside>
 
-          {!filteredTasks.length ? (
-            <div className="glass-soft rounded-2xl px-6 py-12 text-center">
-              <Search size={24} className="mx-auto mb-3 text-muted-ink" />
-              <h2 className="text-sm font-medium text-ink">Tugas tidak ditemukan</h2>
-              <p className="mt-2 text-xs leading-5 text-secondary-ink">Ubah kata kunci atau filter</p>
-              <button type="button" className="mt-4 min-h-11 rounded-xl px-4 text-xs font-medium text-accent" onClick={() => { setQuery(""); setStatusFilter("all"); setCourseFilter("all"); }}>Reset filter</button>
+            <div className="min-w-0">
+              <div className="mb-4 flex items-end justify-between gap-3 px-1">
+                <div className="min-w-0">
+                  <h2 id="task-list-title" className="truncate text-base font-medium leading-6 text-ink" title={activeCourseOption?.course?.name ?? (effectiveCourseFilter === "all" ? "Semua tugas" : "Mata kuliah lain")}>
+                    {activeCourseOption?.course?.name ?? (effectiveCourseFilter === "all" ? "Semua tugas" : "Mata kuliah lain")}
+                  </h2>
+                  <p className="mt-1 text-xs text-secondary-ink">Menampilkan {filteredTasks.length} dari {activeCourseOption?.total ?? tasksWithStatus.length} tugas</p>
+                </div>
+                {activeCourseOption ? (
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-ink">{activeCourseOption.done}/{activeCourseOption.total} selesai</span>
+                ) : null}
+              </div>
+
+              <div className="space-y-3">
+                {filteredTasks.map((task, index) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    course={courses.find((course) => course.id === task.courseId)}
+                    index={index}
+                    onOpen={(item) => setSelectedTaskId(item.id)}
+                    onStatusChange={handleStatusChange}
+                  />
+                ))}
+              </div>
+
+              {!filteredTasks.length ? (
+                <div className="glass-soft rounded-2xl px-6 py-12 text-center">
+                  <Search size={24} className="mx-auto mb-3 text-secondary-ink" />
+                  <h3 className="text-sm font-medium text-ink">Tugas tidak ditemukan</h3>
+                  <p className="mt-2 text-xs leading-5 text-secondary-ink">Ubah kata kunci atau filter</p>
+                  <button type="button" className="mt-4 min-h-11 rounded-xl px-4 text-xs font-medium text-accent" onClick={() => { setQuery(""); setStatusFilter("all"); setCourseFilter("all"); }}>Reset filter</button>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
         </section>
       </main>
 
