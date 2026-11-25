@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #e9edf3;
-  --surface: rgba(255, 255, 255, 0.5);
-  --surface-solid: #f3f6fa;
-  --surface-raised: rgba(255, 255, 255, 0.76);
-  --surface-subtle: rgba(233, 237, 243, 0.72);
-  --text: #151922;
-  --text-secondary: #46505f;
-  --text-muted: #626c7b;
-  --border: rgba(21, 25, 34, 0.08);
-  --border-strong: rgba(21, 25, 34, 0.14);
+  --background: #eef1f5;
+  --surface: rgba(255, 255, 255, 0.58);
+  --surface-solid: #f7f8fa;
+  --surface-raised: rgba(255, 255, 255, 0.82);
+  --surface-subtle: rgba(238, 241, 245, 0.78);
+  --text: #171a21;
+  --text-secondary: #4a5361;
+  --text-muted: #697382;
+  --border: rgba(23, 26, 33, 0.08);
+  --border-strong: rgba(23, 26, 33, 0.14);
   --accent: #2458a6;
   --accent-soft: rgba(36, 88, 166, 0.1);
   --on-accent: #ffffff;
@@ -20,45 +20,45 @@
   --warning-soft: rgba(138, 89, 0, 0.1);
   --success: #176b47;
   --success-soft: rgba(23, 107, 71, 0.09);
-  --shadow: 0 24px 64px rgba(31, 41, 55, 0.12), 0 4px 12px rgba(31, 41, 55, 0.04);
-  --shadow-soft: 0 12px 32px rgba(31, 41, 55, 0.08), 0 2px 6px rgba(31, 41, 55, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.64);
-  --glass-rim: rgba(255, 255, 255, 0.88);
-  --glass-inner-shadow: rgba(21, 25, 34, 0.04);
-  --glass-sheen: rgba(255, 255, 255, 0.2);
-  --glass-blur: 24px;
+  --shadow: 0 24px 64px rgba(31, 41, 55, 0.1), 0 4px 12px rgba(31, 41, 55, 0.04);
+  --shadow-soft: 0 12px 32px rgba(31, 41, 55, 0.07), 0 2px 6px rgba(31, 41, 55, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-rim: rgba(255, 255, 255, 0.92);
+  --glass-inner-shadow: rgba(23, 26, 33, 0.05);
+  --glass-sheen: rgba(255, 255, 255, 0.24);
+  --glass-blur: 28px;
   --ease-ios: cubic-bezier(0.2, 0.8, 0.2, 1);
   --duration-fast: 160ms;
   --duration-base: 220ms;
 }
 
 .dark {
-  --background: #090c11;
-  --surface: rgba(20, 24, 31, 0.56);
-  --surface-solid: #14181f;
-  --surface-raised: rgba(29, 34, 42, 0.78);
-  --surface-subtle: rgba(10, 13, 18, 0.68);
-  --text: #f3f5f7;
-  --text-secondary: #b7bec9;
-  --text-muted: #929ba9;
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --accent: #91b7ff;
-  --accent-soft: rgba(145, 183, 255, 0.12);
+  --background: #0b0d10;
+  --surface: rgba(24, 27, 33, 0.68);
+  --surface-solid: #171a20;
+  --surface-raised: rgba(32, 36, 44, 0.84);
+  --surface-subtle: rgba(11, 13, 16, 0.72);
+  --text: #f4f5f7;
+  --text-secondary: #b9c0ca;
+  --text-muted: #8e97a5;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --accent: #a8c7ff;
+  --accent-soft: rgba(168, 199, 255, 0.12);
   --on-accent: #10162a;
-  --danger: #ff958c;
-  --danger-soft: rgba(255, 149, 140, 0.1);
+  --danger: #ff9c94;
+  --danger-soft: rgba(255, 156, 148, 0.1);
   --warning: #efbd72;
   --warning-soft: rgba(239, 189, 114, 0.1);
   --success: #79d5ad;
   --success-soft: rgba(121, 213, 173, 0.1);
-  --shadow: 0 28px 72px rgba(0, 0, 0, 0.38), 0 6px 16px rgba(0, 0, 0, 0.2);
-  --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.26), 0 3px 8px rgba(0, 0, 0, 0.16);
-  --glass-border: rgba(255, 255, 255, 0.11);
-  --glass-rim: rgba(255, 255, 255, 0.16);
-  --glass-inner-shadow: rgba(0, 0, 0, 0.28);
-  --glass-sheen: rgba(255, 255, 255, 0.075);
-  --glass-blur: 28px;
+  --shadow: 0 28px 72px rgba(0, 0, 0, 0.34), 0 6px 16px rgba(0, 0, 0, 0.18);
+  --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.24), 0 3px 8px rgba(0, 0, 0, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-rim: rgba(255, 255, 255, 0.18);
+  --glass-inner-shadow: rgba(0, 0, 0, 0.32);
+  --glass-sheen: rgba(255, 255, 255, 0.08);
+  --glass-blur: 32px;
 }
 
 @theme inline {
@@ -110,49 +110,41 @@ body {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.3;
+  opacity: 0.16;
   contain: strict;
 }
 
 .aurora-ribbon {
   position: absolute;
-  width: 84vw;
-  height: 30vw;
-  min-height: 280px;
-  max-height: 520px;
+  width: 72vw;
+  height: 26vw;
+  min-height: 240px;
+  max-height: 480px;
   border-radius: 50%;
-  filter: blur(64px);
+  filter: blur(80px);
   will-change: transform;
   animation-timing-function: var(--ease-ios);
   animation-iteration-count: infinite;
 }
 
 .aurora-ribbon-a {
-  top: -18%;
-  left: -20%;
-  background: linear-gradient(102deg, transparent 4%, rgba(77, 205, 170, 0.22) 24%, rgba(65, 144, 232, 0.24) 48%, rgba(130, 112, 219, 0.12) 74%, transparent 96%);
+  top: -22%;
+  left: -18%;
+  background: linear-gradient(102deg, transparent 4%, rgba(64, 112, 190, 0.12) 38%, rgba(64, 112, 190, 0.04) 72%, transparent 96%);
   animation-name: aurora-a;
-  animation-duration: 28s;
-}
-
-.aurora-ribbon-b {
-  top: 18%;
-  right: -34%;
-  background: linear-gradient(96deg, transparent 2%, rgba(86, 110, 225, 0.14) 25%, rgba(68, 193, 197, 0.18) 52%, rgba(139, 109, 213, 0.1) 75%, transparent 96%);
-  animation-name: aurora-b;
   animation-duration: 34s;
 }
 
-.aurora-ribbon-c {
-  bottom: -30%;
-  left: 8%;
-  background: linear-gradient(96deg, transparent 4%, rgba(110, 86, 204, 0.1) 28%, rgba(48, 160, 197, 0.16) 56%, transparent 94%);
-  animation-name: aurora-c;
+.aurora-ribbon-b {
+  right: -28%;
+  bottom: -34%;
+  background: linear-gradient(96deg, transparent 2%, rgba(64, 112, 190, 0.08) 42%, rgba(64, 112, 190, 0.03) 76%, transparent 96%);
+  animation-name: aurora-b;
   animation-duration: 42s;
 }
 
 .dark .aurora {
-  opacity: 0.46;
+  opacity: 0.22;
 }
 
 .dark .aurora-ribbon {
@@ -167,11 +159,6 @@ body {
 @keyframes aurora-b {
   0%, 100% { transform: translate3d(4%, 4%, 0) rotate(10deg) scale(1.04); }
   50% { transform: translate3d(-14%, -8%, 0) rotate(3deg) scale(0.96); }
-}
-
-@keyframes aurora-c {
-  0%, 100% { transform: translate3d(0, 4%, 0) rotate(-4deg) scale(1); }
-  50% { transform: translate3d(10%, -12%, 0) rotate(4deg) scale(1.06); }
 }
 
 h1,
@@ -231,6 +218,44 @@ button:disabled {
   backdrop-filter: blur(18px) saturate(155%) brightness(1.02);
 }
 
+.login-surface {
+  background-color: var(--surface-raised);
+  background-image: linear-gradient(135deg, var(--glass-sheen), transparent 42%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 -1px 0 var(--glass-inner-shadow);
+  -webkit-backdrop-filter: blur(36px) saturate(150%) brightness(1.04);
+  backdrop-filter: blur(36px) saturate(150%) brightness(1.04);
+}
+
+.login-preview {
+  background-color: var(--surface-subtle);
+  box-shadow: inset 1px 0 0 var(--glass-border), inset 0 1px 0 var(--glass-rim);
+}
+
+.login-preview-card {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px var(--glass-inner-shadow), inset 0 1px 0 var(--glass-rim);
+}
+
+.login-submit {
+  background-color: var(--text);
+  color: var(--background);
+  box-shadow: inset 0 1px 0 var(--glass-rim), 0 6px 16px var(--glass-inner-shadow);
+  transition: opacity var(--duration-fast) var(--ease-ios), transform var(--duration-fast) var(--ease-ios);
+}
+
+.login-submit:hover {
+  opacity: 0.92;
+}
+
+.login-submit:active {
+  transform: scale(0.99);
+}
+
 .quiet-stat {
   background-color: var(--surface-subtle);
   border: 1px solid var(--border);
@@ -274,7 +299,8 @@ button:disabled {
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass,
-  .glass-soft {
+  .glass-soft,
+  .login-surface {
     background-color: var(--surface-raised);
   }
 

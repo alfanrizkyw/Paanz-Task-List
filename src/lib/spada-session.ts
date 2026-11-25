@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { EncryptJWT, jwtDecrypt } from "jose";
 
@@ -16,7 +17,7 @@ export interface SpadaSession {
 function encryptionKey() {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET belum diatur.");
-  return new TextEncoder().encode(secret);
+  return createHash("sha256").update(secret).digest();
 }
 
 export async function readSpadaSession(): Promise<SpadaSession | null> {

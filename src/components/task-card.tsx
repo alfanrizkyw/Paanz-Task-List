@@ -32,7 +32,7 @@ export function TaskCard({ task, course, index, onOpen, onStatusChange }: TaskCa
   return (
     <article
       className="glass-soft task-card task-enter relative overflow-hidden rounded-[20px]"
-      style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
+      style={{ animationDelay: `${Math.min(index, 4) * 35}ms` }}
     >
       <span className={cn("deadline-line", deadlineLine[deadline.tone])} />
       <div className="flex items-stretch gap-4 p-4 pl-5 sm:p-5 sm:pl-6">

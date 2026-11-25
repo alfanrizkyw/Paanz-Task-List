@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npm run test:parser && npm run test:auth-flow && npm run test:sync-flow",
+    "test": "npm run test:parser && npm run test:auth-flow && npm run test:session-key && npm run test:sync-flow",
     "test:parser": "node scripts/test-spada-parser.mjs",
     "test:auth-flow": "node scripts/test-auth-flow.mjs",
+    "test:session-key": "node scripts/test-session-key.mjs",
     "test:sync-flow": "node scripts/test-sync-flow.mjs"
   },
   "dependencies": {

@@ -1,21 +1,23 @@
 "use client";
 
 import {
+  ArrowUpRight,
   CheckCircle2,
   Circle,
+  CircleAlert,
+  Clock3,
   Cloud,
   CloudCheck,
   CloudOff,
   Eye,
   EyeOff,
-  KeyRound,
   LayoutList,
+  ListChecks,
   LoaderCircle,
   LogIn,
   LogOut,
   RefreshCw,
   Search,
-  UserRound,
   X,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -33,7 +35,7 @@ import {
   statusMap,
 } from "@/lib/task-state";
 import type { Course, SpadaConnection, SyncPayload, Task, TaskState, TaskStatus, TaskStatusEntry } from "@/lib/types";
-import { cn, formatSyncTime, getDeadlineState } from "@/lib/utils";
+import { cn, formatDeadline, formatSyncTime, getDeadlineState } from "@/lib/utils";
 
 interface DashboardUser {
   nim: string;
@@ -58,6 +60,11 @@ const filterItems: Array<{ value: StatusFilter; label: string }> = [
 ];
 
 const validStatuses = new Set<TaskStatus>(["todo", "doing", "done", "submitted"]);
+const previewDeadlineLine = {
+  danger: "bg-danger",
+  warning: "bg-warning",
+  accent: "bg-accent",
+};
 
 function Brand() {
   return (
@@ -118,10 +125,14 @@ function SiakadLoginDialog({
   open,
   onOpenChange,
   onSuccess,
+  previewTasks,
+  previewCourses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (user: DashboardUser) => void;
+  previewTasks: Task[];
+  previewCourses: Course[];
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -157,48 +168,86 @@ function SiakadLoginDialog({
       }
     }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xl" />
-        <Dialog.Content className="glass fixed left-1/2 top-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-[28px] p-5 shadow-2xl sm:p-7">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Dialog.Title className="text-xl font-medium tracking-tight text-ink">Masuk SIAKAD</Dialog.Title>
-              <Dialog.Description className="mt-2 text-sm leading-6 text-secondary-ink">
-                Memuat mata kuliah dan tugas Anda
-              </Dialog.Description>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/20 backdrop-blur-md" />
+        <Dialog.Content className="login-surface fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[28px] lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-h-0 overflow-y-auto p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title className="text-2xl font-medium tracking-tight text-ink">Masuk SIAKAD</Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm leading-6 text-secondary-ink">
+                  Tugas Polinema, dalam satu tempat
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="icon-button -mr-2 -mt-2" aria-label="Tutup login"><X size={18} /></Dialog.Close>
             </div>
-            <Dialog.Close className="icon-button -mr-2 -mt-2" aria-label="Tutup login"><X size={18} /></Dialog.Close>
+
+            <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-secondary-ink">NIM</span>
+                <input className="control h-12 w-full px-4 text-sm" name="nim" type="text" inputMode="numeric" autoComplete="username" pattern="[0-9]{6,20}" minLength={6} maxLength={20} required autoFocus placeholder="NIM" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium text-secondary-ink">Password</span>
+                <span className="relative block">
+                  <input className="control h-12 w-full px-4 pr-12 text-sm" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="Password" />
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-xl text-muted-ink transition-colors hover:bg-surface-subtle hover:text-ink"
+                    aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((current) => !current)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
+              </label>
+              {error ? (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-danger/20 bg-danger-soft px-3 py-2.5 text-xs leading-5 text-danger">
+                  <CircleAlert size={16} className="mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              ) : null}
+              <button type="submit" disabled={submitting} className="login-submit inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium disabled:opacity-60">
+                {submitting ? <LoaderCircle size={16} className="animate-spin" /> : <LogIn size={16} />}
+                {submitting ? "Menghubungkan ke SIAKAD" : "Masuk dan muat tugas"}
+              </button>
+              <p className="text-center text-[11px] leading-5 text-muted-ink">Password dipakai hanya untuk login SIAKAD</p>
+            </form>
           </div>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <label className="block">
-              <span className="mb-2 block text-xs font-medium text-secondary-ink">NIM</span>
-              <span className="relative block">
-                <UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-ink" />
-                <input className="control w-full pl-10" name="nim" type="text" inputMode="numeric" autoComplete="username" pattern="[0-9]{6,20}" minLength={6} maxLength={20} required autoFocus placeholder="NIM mahasiswa" />
-              </span>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-xs font-medium text-secondary-ink">Password</span>
-              <span className="relative block">
-                <KeyRound size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-ink" />
-                <input className="control w-full pl-10 pr-12" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="Password SIAKAD" />
-                <button
-                  type="button"
-                  className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-xl text-muted-ink transition-colors hover:bg-surface-subtle hover:text-ink"
-                  aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
-                  aria-pressed={showPassword}
-                  onClick={() => setShowPassword((current) => !current)}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </span>
-            </label>
-            {error ? <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-xs leading-5 text-danger">{error}</p> : null}
-            <button type="submit" disabled={submitting} className="primary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-medium text-on-accent disabled:opacity-60">
-              {submitting ? <LoaderCircle size={16} className="animate-spin" /> : <LogIn size={16} />}
-              {submitting ? "Menghubungkan ke SIAKAD" : "Masuk dan muat tugas"}
-            </button>
-          </form>
+          <aside className="login-preview hidden min-h-0 overflow-y-auto border-l border-line p-6 lg:flex lg:flex-col" aria-label="Pratinjau tugas">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-medium text-ink">
+                <ListChecks size={17} className="text-accent" />
+                Tugas terdekat
+              </div>
+              <p className="mt-2 text-xs leading-5 text-secondary-ink">Deadline dan status dari SPADA</p>
+            </div>
+            <div className="mt-6 space-y-3">
+              {previewTasks.slice(0, 3).map((task) => {
+                const course = previewCourses.find((item) => item.id === task.courseId);
+                const deadline = getDeadlineState(task.dueAt);
+                return (
+                  <div key={task.id} className="login-preview-card relative overflow-hidden rounded-2xl p-4 pl-5">
+                    <span className={cn("deadline-line", previewDeadlineLine[deadline.tone])} />
+                    <div className="flex items-center justify-between gap-3 text-[11px] text-muted-ink">
+                      <span className="font-mono">{course?.code ?? "SPADA"}</span>
+                      <ArrowUpRight size={14} />
+                    </div>
+                    <h3 className="mt-2 text-sm font-medium leading-5 text-ink">{task.title}</h3>
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-secondary-ink">
+                      <Clock3 size={13} />
+                      <span className="font-mono tabular-nums">{task.dueAt ? formatDeadline(task.dueAt) : "Tanpa deadline"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-auto pt-8">
+              <p className="text-xs leading-5 text-secondary-ink">Garis warna menandai tenggat setiap tugas</p>
+              <p className="mt-1 text-[11px] leading-5 text-muted-ink">Tugas tanpa deadline tetap ditampilkan</p>
+            </div>
+          </aside>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -573,7 +622,7 @@ export function TaskDashboard({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Tugas saya</h1>
-              {!connected ? <span className="rounded-lg bg-surface-subtle px-2 py-1 text-[11px] text-muted-ink">Contoh</span> : null}
+              {!connected ? <span className="text-[11px] text-muted-ink">Pratinjau</span> : null}
             </div>
             <p className="mt-2 text-sm text-secondary-ink">{counts.total} tugas · {courses.length} mata kuliah</p>
           </div>
@@ -682,7 +731,13 @@ export function TaskDashboard({
         </section>
       </main>
 
-      <SiakadLoginDialog open={loginOpen} onOpenChange={setLoginOpen} onSuccess={handleLogin} />
+      <SiakadLoginDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        onSuccess={handleLogin}
+        previewTasks={initialTasks}
+        previewCourses={initialCourses}
+      />
       <TaskDetailDialog
         task={selectedTask}
         course={selectedCourse}

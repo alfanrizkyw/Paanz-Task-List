@@ -27,8 +27,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e9edf3" },
-    { media: "(prefers-color-scheme: dark)", color: "#090c11" },
+    { media: "(prefers-color-scheme: light)", color: "#eef1f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0d10" },
   ],
 };
 
@@ -49,7 +49,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="aurora" aria-hidden="true">
             <div className="aurora-ribbon aurora-ribbon-a" />
             <div className="aurora-ribbon aurora-ribbon-b" />
-            <div className="aurora-ribbon aurora-ribbon-c" />
           </div>
           <div className="relative z-10">
             {children}
